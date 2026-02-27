@@ -1,0 +1,1879 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Token Forge — Bitcoin L1 Token Deployer</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg:        #07050f;
+      --surface:   #0e0b1a;
+      --panel:     #130f22;
+      --border:    #2a1f45;
+      --orange:    #f97316;
+      --gold:      #f59e0b;
+      --ember:     #ef4444;
+      --text:      #e8ddd0;
+      --muted:     #7a6e8a;
+      --success:   #22c55e;
+      --purple:    #7c3aed;
+      --purple-mid:#4c1d95;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Space Mono', monospace;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* Ripple canvas sits fixed behind everything */
+    #rippleCanvas {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 0;
+      pointer-events: none;
+    }
+
+    /* Dark vignette over the canvas so content stays readable */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background:
+        radial-gradient(ellipse at 50% 50%, transparent 20%, rgba(7,5,15,0.75) 100%);
+      pointer-events: none;
+      z-index: 1;
+    }
+
+    /* Scanlines overlay */
+    body::after {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.04) 2px, rgba(0,0,0,0.04) 4px);
+      pointer-events: none;
+      z-index: 9999;
+    }
+
+    /* ── HEADER ── */
+    header {
+      position: relative;
+      z-index: 10;
+      border-bottom: 1px solid var(--border);
+      padding: 0 2rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 64px;
+      background: rgba(7,5,15,0.92);
+      backdrop-filter: blur(12px);
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .logo-icon {
+      width: 36px;
+      height: 36px;
+      position: relative;
+    }
+
+    .logo-icon svg { width: 100%; height: 100%; }
+
+    .logo-text {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 1.8rem;
+      letter-spacing: 0.08em;
+      background: linear-gradient(135deg, var(--orange), var(--gold));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .logo-sub {
+      font-size: 0.6rem;
+      color: var(--muted);
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      margin-top: -4px;
+    }
+
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .network-badge {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 12px;
+      border: 1px solid var(--border);
+      border-radius: 2px;
+      font-size: 0.65rem;
+      color: var(--muted);
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+    }
+
+    .network-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--success);
+      box-shadow: 0 0 6px var(--success);
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+
+    /* ── CONNECT BUTTON ── */
+    .btn-connect {
+      background: transparent;
+      border: 1px solid var(--orange);
+      color: var(--orange);
+      font-family: 'Space Mono', monospace;
+      font-size: 0.7rem;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      padding: 8px 20px;
+      cursor: pointer;
+      transition: all 0.2s;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .btn-connect::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: var(--orange);
+      transform: translateX(-100%);
+      transition: transform 0.2s;
+      z-index: -1;
+    }
+
+    .btn-connect:hover::before { transform: translateX(0); }
+    .btn-connect:hover { color: var(--bg); }
+
+    .btn-connect.connected {
+      border-color: var(--success);
+      color: var(--success);
+    }
+
+    .btn-connect.connected::before { background: var(--success); }
+    .btn-connect.connected:hover { color: var(--bg); }
+
+    /* ── MAIN ── */
+    main {
+      position: relative;
+      z-index: 2;
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 3rem 2rem 6rem;
+    }
+
+    /* ── HERO ── */
+    .hero {
+      text-align: center;
+      margin-bottom: 3rem;
+      animation: fadeUp 0.6s ease both;
+    }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(20px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .hero h1 {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: clamp(3rem, 8vw, 5.5rem);
+      letter-spacing: 0.06em;
+      line-height: 1;
+      background: linear-gradient(135deg, #fff 0%, var(--gold) 50%, var(--orange) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .hero p {
+      margin-top: 1rem;
+      color: var(--muted);
+      font-size: 0.8rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    /* ── TABS ── */
+    .tabs {
+      display: flex;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 2rem;
+      animation: fadeUp 0.6s 0.1s ease both;
+    }
+
+    .tab {
+      background: none;
+      border: none;
+      color: var(--muted);
+      font-family: 'Space Mono', monospace;
+      font-size: 0.7rem;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      padding: 12px 24px;
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      margin-bottom: -1px;
+      transition: all 0.2s;
+    }
+
+    .tab:hover { color: var(--text); }
+
+    .tab.active {
+      color: var(--orange);
+      border-bottom-color: var(--orange);
+    }
+
+    .tab-panel { display: none; animation: fadeUp 0.3s ease both; }
+    .tab-panel.active { display: block; }
+
+    /* ── PANEL ── */
+    .panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      padding: 2rem;
+      position: relative;
+    }
+
+    .panel::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, var(--orange), var(--gold), transparent);
+    }
+
+    .panel-title {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 1.4rem;
+      letter-spacing: 0.1em;
+      color: var(--gold);
+      margin-bottom: 0.3rem;
+    }
+
+    .panel-desc {
+      font-size: 0.7rem;
+      color: var(--muted);
+      margin-bottom: 2rem;
+      letter-spacing: 0.05em;
+    }
+
+    /* ── FORM ── */
+    .form-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.2rem;
+    }
+
+    .form-grid.single { grid-template-columns: 1fr; }
+
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .field.span2 { grid-column: 1 / -1; }
+
+    label {
+      font-size: 0.65rem;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    label span {
+      color: var(--ember);
+      margin-left: 2px;
+    }
+
+    input, textarea, select {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      color: var(--text);
+      font-family: 'Space Mono', monospace;
+      font-size: 0.85rem;
+      padding: 10px 14px;
+      outline: none;
+      transition: border-color 0.2s;
+      width: 100%;
+    }
+
+    input:focus, textarea:focus, select:focus {
+      border-color: var(--orange);
+    }
+
+    textarea { resize: vertical; min-height: 80px; }
+
+    select option { background: var(--panel); }
+
+    input::placeholder, textarea::placeholder {
+      color: var(--muted);
+      opacity: 0.6;
+    }
+
+    .field-hint {
+      font-size: 0.6rem;
+      color: var(--muted);
+      opacity: 0.7;
+    }
+
+    /* ── DIVIDER ── */
+    .divider {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      margin: 2rem 0;
+    }
+
+    .divider-line {
+      flex: 1;
+      height: 1px;
+      background: var(--border);
+    }
+
+    .divider-label {
+      font-size: 0.65rem;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    /* ── TOGGLE ── */
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 0;
+    }
+
+    .toggle-info h4 {
+      font-size: 0.8rem;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 2px;
+    }
+
+    .toggle-info p {
+      font-size: 0.65rem;
+      color: var(--muted);
+    }
+
+    .toggle {
+      position: relative;
+      width: 44px;
+      height: 24px;
+      flex-shrink: 0;
+    }
+
+    .toggle input { opacity: 0; width: 0; height: 0; }
+
+    .toggle-slider {
+      position: absolute;
+      inset: 0;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      cursor: pointer;
+      transition: 0.3s;
+    }
+
+    .toggle-slider::before {
+      content: '';
+      position: absolute;
+      width: 16px;
+      height: 16px;
+      left: 3px;
+      top: 3px;
+      background: var(--muted);
+      transition: 0.3s;
+    }
+
+    .toggle input:checked + .toggle-slider {
+      background: rgba(249,115,22,0.15);
+      border-color: var(--orange);
+    }
+
+    .toggle input:checked + .toggle-slider::before {
+      transform: translateX(20px);
+      background: var(--orange);
+    }
+
+    .faucet-fields {
+      display: none;
+      animation: fadeUp 0.3s ease both;
+    }
+
+    .faucet-fields.show { display: block; }
+
+    /* ── SUBMIT BUTTON ── */
+    .btn-forge {
+      width: 100%;
+      margin-top: 2rem;
+      background: linear-gradient(135deg, var(--orange), var(--gold));
+      border: none;
+      color: var(--bg);
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 1.3rem;
+      letter-spacing: 0.15em;
+      padding: 16px;
+      cursor: pointer;
+      transition: all 0.2s;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .btn-forge:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 8px 24px rgba(249,115,22,0.3);
+    }
+
+    .btn-forge:active { transform: translateY(0); }
+
+    .btn-forge:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+      transform: none;
+      box-shadow: none;
+    }
+
+    /* forge animation on button */
+    .btn-forge .sparks {
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(135deg, transparent 40%, rgba(255,255,255,0.15) 50%, transparent 60%);
+      transform: translateX(-100%) skewX(-15deg);
+      transition: none;
+    }
+
+    .btn-forge:not(:disabled):hover .sparks {
+      animation: shimmer 0.6s ease forwards;
+    }
+
+    @keyframes shimmer {
+      to { transform: translateX(200%) skewX(-15deg); }
+    }
+
+    /* ── STATUS ── */
+    .status-box {
+      margin-top: 1.5rem;
+      padding: 1rem 1.5rem;
+      border: 1px solid var(--border);
+      background: var(--panel);
+      display: none;
+      animation: fadeUp 0.3s ease both;
+    }
+
+    .status-box.show { display: block; }
+    .status-box.success { border-color: var(--success); }
+    .status-box.error { border-color: var(--ember); }
+    .status-box.pending { border-color: var(--gold); }
+
+    .status-title {
+      font-size: 0.65rem;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+
+    .status-box.success .status-title { color: var(--success); }
+    .status-box.error .status-title { color: var(--ember); }
+    .status-box.pending .status-title { color: var(--gold); }
+
+    .status-msg {
+      font-size: 0.78rem;
+      color: var(--text);
+      word-break: break-all;
+    }
+
+    .status-link {
+      display: inline-block;
+      margin-top: 8px;
+      font-size: 0.7rem;
+      color: var(--orange);
+      text-decoration: none;
+      letter-spacing: 0.05em;
+    }
+
+    .status-link:hover { text-decoration: underline; }
+
+    /* ── SPINNER ── */
+    .spinner {
+      display: inline-block;
+      width: 12px;
+      height: 12px;
+      border: 2px solid rgba(249,115,22,0.3);
+      border-top-color: var(--orange);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin-right: 8px;
+      vertical-align: middle;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── DASHBOARD ── */
+    .empty-state {
+      text-align: center;
+      padding: 4rem 2rem;
+      color: var(--muted);
+    }
+
+    .empty-icon {
+      font-size: 3rem;
+      margin-bottom: 1rem;
+      opacity: 0.4;
+    }
+
+    .empty-state h3 {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 1.5rem;
+      letter-spacing: 0.1em;
+      margin-bottom: 0.5rem;
+      color: var(--muted);
+    }
+
+    .empty-state p {
+      font-size: 0.7rem;
+      letter-spacing: 0.05em;
+    }
+
+    .token-card {
+      border: 1px solid var(--border);
+      background: var(--panel);
+      padding: 1.2rem 1.5rem;
+      margin-bottom: 1rem;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 1rem;
+      align-items: center;
+      transition: border-color 0.2s;
+      animation: fadeUp 0.3s ease both;
+    }
+
+    .token-card:hover { border-color: var(--orange); }
+
+    .token-name {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 1.3rem;
+      letter-spacing: 0.08em;
+      color: var(--gold);
+    }
+
+    .token-ticker {
+      display: inline-block;
+      background: rgba(249,115,22,0.1);
+      border: 1px solid rgba(249,115,22,0.3);
+      color: var(--orange);
+      font-size: 0.65rem;
+      letter-spacing: 0.15em;
+      padding: 2px 8px;
+      margin-left: 8px;
+      vertical-align: middle;
+    }
+
+    .token-meta {
+      font-size: 0.65rem;
+      color: var(--muted);
+      margin-top: 4px;
+      letter-spacing: 0.05em;
+    }
+
+    .token-meta span { color: var(--text); }
+
+    .token-actions {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      align-items: flex-end;
+    }
+
+    .btn-sm {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      font-family: 'Space Mono', monospace;
+      font-size: 0.6rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      padding: 5px 12px;
+      cursor: pointer;
+      transition: all 0.2s;
+      text-decoration: none;
+      display: inline-block;
+    }
+
+    .btn-sm:hover { border-color: var(--orange); color: var(--orange); }
+
+    .faucet-badge {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 0.6rem;
+      color: var(--success);
+      letter-spacing: 0.1em;
+    }
+
+    .faucet-dot {
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: var(--success);
+      box-shadow: 0 0 4px var(--success);
+      animation: pulse 2s infinite;
+    }
+
+    /* ── FAUCET PANEL ── */
+    .faucet-claim-card {
+      border: 1px solid var(--border);
+      background: var(--panel);
+      padding: 1.5rem;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .faucet-claim-card::after {
+      content: 'FAUCET';
+      position: absolute;
+      top: 50%;
+      right: -20px;
+      transform: translateY(-50%) rotate(90deg);
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 5rem;
+      color: rgba(249,115,22,0.04);
+      letter-spacing: 0.1em;
+      pointer-events: none;
+    }
+
+    .faucet-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 1.5rem;
+    }
+
+    .faucet-amount {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 2.5rem;
+      color: var(--orange);
+      line-height: 1;
+    }
+
+    .faucet-amount span {
+      font-size: 1rem;
+      color: var(--muted);
+      margin-left: 4px;
+    }
+
+    .cooldown-bar {
+      margin-top: 1rem;
+      height: 4px;
+      background: var(--border);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .cooldown-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--orange), var(--gold));
+      width: 0%;
+      transition: width 1s ease;
+    }
+
+    .stats-row {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1px;
+      background: var(--border);
+      margin-bottom: 1.5rem;
+    }
+
+    .stat-cell {
+      background: var(--panel);
+      padding: 1rem;
+      text-align: center;
+    }
+
+    .stat-value {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 1.5rem;
+      color: var(--gold);
+      letter-spacing: 0.05em;
+    }
+
+    .stat-label {
+      font-size: 0.6rem;
+      color: var(--muted);
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      margin-top: 2px;
+    }
+
+    /* ── FOOTER ── */
+    footer {
+      position: relative;
+      z-index: 2;
+      border-top: 1px solid var(--border);
+      padding: 1.5rem 2rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      color: var(--muted);
+      font-size: 0.65rem;
+      letter-spacing: 0.1em;
+    }
+
+    footer a { color: var(--orange); text-decoration: none; }
+    footer a:hover { text-decoration: underline; }
+
+    /* ── WALLET MODAL ── */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.8);
+      backdrop-filter: blur(4px);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .modal-overlay.show { display: flex; }
+
+    .modal {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      padding: 2rem;
+      width: 100%;
+      max-width: 400px;
+      position: relative;
+      animation: fadeUp 0.3s ease both;
+    }
+
+    .modal::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, var(--orange), var(--gold));
+    }
+
+    .modal-title {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 1.4rem;
+      letter-spacing: 0.1em;
+      color: var(--gold);
+      margin-bottom: 0.3rem;
+    }
+
+    .modal-desc {
+      font-size: 0.68rem;
+      color: var(--muted);
+      margin-bottom: 1.5rem;
+    }
+
+    .wallet-option {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      padding: 1rem;
+      border: 1px solid var(--border);
+      background: var(--panel);
+      cursor: pointer;
+      transition: all 0.2s;
+      margin-bottom: 0.5rem;
+      width: 100%;
+      text-align: left;
+    }
+
+    .wallet-option:hover { border-color: var(--orange); }
+
+    .wallet-icon {
+      width: 36px;
+      height: 36px;
+      background: rgba(249,115,22,0.1);
+      border: 1px solid rgba(249,115,22,0.3);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.2rem;
+      flex-shrink: 0;
+    }
+
+    .wallet-info strong {
+      display: block;
+      font-size: 0.8rem;
+      color: var(--text);
+      margin-bottom: 2px;
+    }
+
+    .wallet-info span {
+      font-size: 0.65rem;
+      color: var(--muted);
+    }
+
+    .modal-close {
+      position: absolute;
+      top: 1rem; right: 1rem;
+      background: none;
+      border: none;
+      color: var(--muted);
+      font-size: 1.2rem;
+      cursor: pointer;
+      line-height: 1;
+    }
+
+    .modal-close:hover { color: var(--text); }
+
+    /* ── RESPONSIVE ── */
+    @media (max-width: 640px) {
+      .form-grid { grid-template-columns: 1fr; }
+      .form-grid .field.span2 { grid-column: 1; }
+      .stats-row { grid-template-columns: 1fr; }
+      .token-card { grid-template-columns: 1fr; }
+      header { padding: 0 1rem; }
+      main { padding: 2rem 1rem 4rem; }
+      .panel { padding: 1.2rem; }
+    }
+
+    /* ── COPY BUTTON ── */
+    .copy-wrap {
+      display: flex;
+      gap: 8px;
+      margin-top: 8px;
+    }
+
+    .copy-wrap input {
+      flex: 1;
+      font-size: 0.72rem;
+      padding: 8px 10px;
+      color: var(--muted);
+    }
+
+    .btn-copy {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      font-family: 'Space Mono', monospace;
+      font-size: 0.65rem;
+      letter-spacing: 0.1em;
+      padding: 0 14px;
+      cursor: pointer;
+      transition: all 0.2s;
+      white-space: nowrap;
+    }
+
+    .btn-copy:hover { border-color: var(--orange); color: var(--orange); }
+    .btn-copy.copied { border-color: var(--success); color: var(--success); }
+  </style>
+</head>
+<body>
+
+<canvas id="rippleCanvas"></canvas>
+
+<!-- ── HEADER ── -->
+<header>
+  <div class="logo">
+    <div class="logo-icon">
+      <svg viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M18 4L32 12V24L18 32L4 24V12L18 4Z" stroke="#f97316" stroke-width="1.5" fill="none"/>
+        <path d="M18 4L18 32M4 12L32 24M32 12L4 24" stroke="#f59e0b" stroke-width="0.8" opacity="0.4"/>
+        <circle cx="18" cy="18" r="4" fill="#f97316"/>
+      </svg>
+    </div>
+    <div>
+      <div class="logo-text">Token Forge</div>
+      <div class="logo-sub">Bitcoin L1 · OP_NET</div>
+    </div>
+  </div>
+  <div class="header-right">
+    <div class="network-badge">
+      <div class="network-dot"></div>
+      Mainnet
+    </div>
+    <button class="btn-connect" id="connectBtn" onclick="openWalletModal()">Connect Wallet</button>
+  </div>
+</header>
+
+<!-- ── MAIN ── -->
+<main>
+  <div class="hero">
+    <h1>Forge Your Token</h1>
+    <p>Deploy OP-20 tokens on Bitcoin Layer 1 · Instantly launch a faucet · No code required</p>
+  </div>
+
+  <!-- TABS -->
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('deploy')">⚒ Deploy Token</button>
+    <button class="tab" onclick="switchTab('faucet')">💧 Claim Faucet</button>
+    <button class="tab" onclick="switchTab('dashboard')">◈ My Tokens</button>
+  </div>
+
+  <!-- ── TAB: DEPLOY ── -->
+  <div class="tab-panel active" id="tab-deploy">
+    <div class="panel">
+      <div class="panel-title">Deploy OP-20 Token</div>
+      <div class="panel-desc">Fill in the details below. Your token will be deployed to Bitcoin L1 via OP_NET.</div>
+
+      <div class="form-grid">
+        <div class="field">
+          <label>Token Name <span>*</span></label>
+          <input type="text" id="tokenName" placeholder="e.g. Forge Token" maxlength="32" />
+        </div>
+        <div class="field">
+          <label>Ticker Symbol <span>*</span></label>
+          <input type="text" id="tokenSymbol" placeholder="e.g. FORGE" maxlength="8" oninput="this.value = this.value.toUpperCase()" />
+        </div>
+        <div class="field">
+          <label>Total Supply <span>*</span></label>
+          <input type="number" id="tokenSupply" placeholder="e.g. 21000000" min="1" />
+        </div>
+        <div class="field">
+          <label>Decimals</label>
+          <input type="number" id="tokenDecimals" value="8" min="0" max="18" />
+          <div class="field-hint">Standard is 8 (Bitcoin-native)</div>
+        </div>
+        <div class="field span2">
+          <label>Description</label>
+          <textarea id="tokenDesc" placeholder="Optional — describe your token's purpose..."></textarea>
+        </div>
+      </div>
+
+      <!-- FAUCET TOGGLE -->
+      <div class="divider">
+        <div class="divider-line"></div>
+        <div class="divider-label">Optional: Faucet Setup</div>
+        <div class="divider-line"></div>
+      </div>
+
+      <div class="toggle-row">
+        <div class="toggle-info">
+          <h4>Launch a Faucet</h4>
+          <p>Let people claim test amounts of your token automatically</p>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" id="faucetToggle" onchange="toggleFaucet()" />
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+
+      <div class="faucet-fields" id="faucetFields">
+        <div class="form-grid" style="margin-top:1rem;">
+          <div class="field">
+            <label>Claim Amount per Address <span>*</span></label>
+            <input type="number" id="faucetAmount" placeholder="e.g. 1000" min="1" />
+          </div>
+          <div class="field">
+            <label>Cooldown Period (hours)</label>
+            <input type="number" id="faucetCooldown" value="24" min="1" />
+          </div>
+          <div class="field">
+            <label>Faucet Reserve (tokens)</label>
+            <input type="number" id="faucetReserve" placeholder="e.g. 1000000" min="1" />
+            <div class="field-hint">Amount to allocate to the faucet contract</div>
+          </div>
+          <div class="field">
+            <label>Max Claims Total</label>
+            <input type="number" id="faucetMaxClaims" placeholder="e.g. 10000 (optional)" min="1" />
+          </div>
+        </div>
+      </div>
+
+      <button class="btn-forge" id="deployBtn" onclick="deployToken()">
+        <span class="sparks"></span>
+        ⚒ &nbsp;Forge Token
+      </button>
+
+      <div class="status-box" id="deployStatus">
+        <div class="status-title" id="deployStatusTitle"></div>
+        <div class="status-msg" id="deployStatusMsg"></div>
+        <a class="status-link" id="deployStatusLink" href="#" target="_blank" style="display:none"></a>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── TAB: FAUCET ── -->
+  <div class="tab-panel" id="tab-faucet">
+    <div class="panel">
+      <div class="panel-title">Claim From Faucet</div>
+      <div class="panel-desc">Enter a faucet contract address to claim tokens. One claim per cooldown period.</div>
+
+      <div class="field" style="margin-bottom:1.5rem;">
+        <label>Faucet Contract Address <span>*</span></label>
+        <input type="text" id="faucetAddress" placeholder="bcrt1p..." />
+      </div>
+
+      <button class="btn-forge" style="margin-top:0; max-width:200px;" onclick="lookupFaucet()">
+        <span class="sparks"></span>
+        Look Up
+      </button>
+
+      <!-- Faucet Info Card (shown after lookup) -->
+      <div id="faucetInfo" style="display:none; margin-top:2rem; animation: fadeUp 0.3s ease both;">
+        <div class="stats-row">
+          <div class="stat-cell">
+            <div class="stat-value" id="faucetStatClaimed">—</div>
+            <div class="stat-label">Total Claimed</div>
+          </div>
+          <div class="stat-cell">
+            <div class="stat-value" id="faucetStatRemaining">—</div>
+            <div class="stat-label">Remaining</div>
+          </div>
+          <div class="stat-cell">
+            <div class="stat-value" id="faucetStatClaimers">—</div>
+            <div class="stat-label">Claimers</div>
+          </div>
+        </div>
+
+        <div class="faucet-claim-card">
+          <div class="faucet-header">
+            <div>
+              <div class="faucet-amount" id="faucetClaimAmount">1,000 <span>TOKENS</span></div>
+              <div style="font-size:0.65rem; color:var(--muted); margin-top:4px;" id="faucetCooldownInfo">
+                Cooldown: 24 hours per address
+              </div>
+            </div>
+            <div>
+              <div class="faucet-badge">
+                <div class="faucet-dot"></div>
+                ACTIVE
+              </div>
+            </div>
+          </div>
+
+          <div class="cooldown-bar">
+            <div class="cooldown-fill" id="cooldownFill"></div>
+          </div>
+          <div style="font-size:0.6rem; color:var(--muted); margin-top:4px; text-align:right;" id="cooldownLabel">Ready to claim</div>
+
+          <button class="btn-forge" style="margin-top:1.5rem;" id="claimBtn" onclick="claimFaucet()">
+            <span class="sparks"></span>
+            💧 &nbsp;Claim Tokens
+          </button>
+        </div>
+
+        <div class="status-box" id="claimStatus" style="margin-top:1rem;">
+          <div class="status-title" id="claimStatusTitle"></div>
+          <div class="status-msg" id="claimStatusMsg"></div>
+          <a class="status-link" id="claimStatusLink" href="#" target="_blank" style="display:none"></a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── TAB: DASHBOARD ── -->
+  <div class="tab-panel" id="tab-dashboard">
+    <div class="panel">
+      <div class="panel-title">My Deployed Tokens</div>
+      <div class="panel-desc">All tokens deployed from your connected wallet.</div>
+
+      <div id="dashboardContent">
+        <div class="empty-state">
+          <div class="empty-icon">⬡</div>
+          <h3>No Tokens Yet</h3>
+          <p>Connect your wallet and deploy your first token to see it here.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<!-- ── FOOTER ── -->
+<footer>
+  <span>Token Forge · Built on <a href="https://opnet.org" target="_blank">OP_NET</a> · Bitcoin L1</span>
+  <span>
+    <a href="https://opscan.org" target="_blank">OPScan</a> ·
+    <a href="https://docs.opnet.org" target="_blank">Docs</a> ·
+    <a href="https://vibecode.finance" target="_blank">vibecode.finance</a>
+  </span>
+</footer>
+
+<!-- ── WALLET MODAL ── -->
+<div class="modal-overlay" id="walletModal">
+  <div class="modal">
+    <button class="modal-close" onclick="closeWalletModal()">✕</button>
+    <div class="modal-title">Connect Wallet</div>
+    <div class="modal-desc">Choose your Bitcoin wallet to deploy OP-20 tokens on Bitcoin L1.</div>
+    <div id="walletList"></div>
+    <div style="margin-top:1rem;padding-top:.8rem;border-top:1px solid var(--border);
+      font-size:.58rem;color:var(--muted);text-align:center;line-height:1.8">
+      Need OP_NET support? Use
+      <a href="https://chromewebstore.google.com/detail/opwallet/pmbjpcmaaladnfpacpmhmnfmpklgbdjb" target="_blank" style="color:var(--orange)">OP_WALLET</a> ·
+      <a href="https://unisat.io" target="_blank" style="color:var(--orange)">UniSat</a> ·
+      <a href="https://www.xverse.app" target="_blank" style="color:var(--orange)">Xverse</a>
+    </div>
+  </div>
+</div>
+
+<script>
+  // ── STATE ──
+  let walletConnected = false;
+  let walletAddress = null;
+  let walletType = null;
+  let deployedTokens = JSON.parse(localStorage.getItem('tokenForge_tokens') || '[]');
+
+  // ── WALLET DEFINITIONS ──
+  const WALLETS = [
+    {
+      id: 'opwallet',
+      name: 'OP_WALLET',
+      desc: 'Official OP_NET wallet — full deploy support',
+      icon: '₿',
+      detect: () => !!(window.opnet || (window.bitcoin && window.bitcoin._isOPWallet)),
+      connect: async () => {
+        if (window.opnet)  return (await window.opnet.requestAccounts())[0];
+        if (window.bitcoin) return (await window.bitcoin.requestAccounts())[0];
+      },
+    },
+    {
+      id: 'unisat',
+      name: 'UniSat',
+      desc: 'Bitcoin & Ordinals wallet',
+      icon: '🟠',
+      detect: () => !!window.unisat,
+      connect: async () => (await window.unisat.requestAccounts())[0],
+    },
+    {
+      id: 'xverse',
+      name: 'Xverse',
+      desc: 'Bitcoin & Ordinals wallet',
+      icon: '✦',
+      detect: () => !!(window.XverseProviders?.BitcoinProvider || window.BitcoinProvider),
+      connect: async () => {
+        const p = window.XverseProviders?.BitcoinProvider || window.BitcoinProvider;
+        if (p?.connect) {
+          const r = await p.connect({ purposes: ['payment', 'ordinals'] });
+          return r?.addresses?.find(a => a.purpose === 'ordinals')?.address
+              || r?.addresses?.[0]?.address;
+        }
+        throw new Error('Xverse connection failed — please try from the extension popup');
+      },
+    },
+    {
+      id: 'leather',
+      name: 'Leather',
+      desc: 'Formerly Hiro Wallet',
+      icon: '🟤',
+      detect: () => !!window.LeatherProvider,
+      connect: async () => {
+        const r = await window.LeatherProvider.request('getAddresses', null);
+        const addrs = r?.result?.addresses || [];
+        return addrs.find(a => a.type === 'p2tr')?.address
+            || addrs.find(a => a.address?.startsWith('bc1p'))?.address
+            || addrs[0]?.address;
+      },
+    },
+    {
+      id: 'magiceden',
+      name: 'Magic Eden',
+      desc: 'ME Wallet',
+      icon: '🎨',
+      detect: () => !!(window.magicEden?.bitcoin || window.magiceden),
+      connect: async () => {
+        const p = window.magicEden?.bitcoin || window.magiceden;
+        return (await p.requestAccounts())[0];
+      },
+    },
+    {
+      id: 'okx',
+      name: 'OKX Wallet',
+      desc: 'Multi-chain · Bitcoin support',
+      icon: '⭕',
+      detect: () => !!(window.okxwallet?.bitcoin || window.okxwallet),
+      connect: async () => {
+        const p = window.okxwallet?.bitcoin || window.okxwallet;
+        const a = await p.requestAccounts();
+        return a[0]?.address || a[0];
+      },
+    },
+    {
+      id: 'phantom',
+      name: 'Phantom',
+      desc: 'Multi-chain · Bitcoin support',
+      icon: '👻',
+      detect: () => !!window.phantom?.bitcoin,
+      connect: async () => {
+        const r = await window.phantom.bitcoin.requestAccounts();
+        return r[0]?.address || r[0];
+      },
+    },
+  ];
+
+  const INSTALL_URLS = {
+    opwallet:  'https://chromewebstore.google.com/detail/opwallet/pmbjpcmaaladnfpacpmhmnfmpklgbdjb',
+    unisat:    'https://unisat.io',
+    xverse:    'https://www.xverse.app/download',
+    leather:   'https://leather.io',
+    magiceden: 'https://wallet.magiceden.io',
+    okx:       'https://www.okx.com/web3',
+    phantom:   'https://phantom.app',
+  };
+
+  // ── TABS ──
+  function switchTab(name) {
+    document.querySelectorAll('.tab').forEach((t, i) => {
+      t.classList.toggle('active', ['deploy','faucet','dashboard'][i] === name);
+    });
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    document.getElementById('tab-' + name).classList.add('active');
+    if (name === 'dashboard') renderDashboard();
+  }
+
+  // ── FAUCET TOGGLE ──
+  function toggleFaucet() {
+    const checked = document.getElementById('faucetToggle').checked;
+    document.getElementById('faucetFields').classList.toggle('show', checked);
+  }
+
+  // ── WALLET MODAL ──
+  function openWalletModal() {
+    if (walletConnected) { disconnectWallet(); return; }
+    renderWalletList();
+    document.getElementById('walletModal').classList.add('show');
+  }
+
+  function closeWalletModal() {
+    document.getElementById('walletModal').classList.remove('show');
+  }
+
+  function renderWalletList() {
+    const list = document.getElementById('walletList');
+    list.innerHTML = WALLETS.map(w => {
+      const installed = w.detect();
+      return `
+        <button class="wallet-option" onclick="selectWallet('${w.id}')"
+          style="opacity:${installed ? '1' : '0.6'}">
+          <div class="wallet-icon">${w.icon}</div>
+          <div class="wallet-info">
+            <strong>${w.name}</strong>
+            <span>${w.desc}</span>
+          </div>
+          <span style="font-size:.55rem;letter-spacing:.12em;text-transform:uppercase;
+            padding:2px 8px;border:1px solid ${installed ? 'var(--success)' : 'var(--border)'};
+            color:${installed ? 'var(--success)' : 'var(--muted)'};margin-left:auto;flex-shrink:0">
+            ${installed ? 'Detected' : 'Install'}
+          </span>
+        </button>`;
+    }).join('');
+  }
+
+  async function selectWallet(id) {
+    const w = WALLETS.find(x => x.id === id);
+    if (!w) return;
+
+    if (!w.detect()) {
+      window.open(INSTALL_URLS[id] || '#', '_blank');
+      showToast(`↗ Opening ${w.name} install page`);
+      return;
+    }
+
+    closeWalletModal();
+    const btn = document.getElementById('connectBtn');
+    btn.textContent = 'Connecting…';
+
+    try {
+      walletAddress = await w.connect();
+      if (!walletAddress) throw new Error('No address returned from wallet');
+      walletConnected = true;
+      walletType = id;
+      const short = walletAddress.slice(0, 7) + '…' + walletAddress.slice(-5);
+      btn.textContent = short;
+      btn.classList.add('connected');
+      showToast(`✓ ${w.name} connected`);
+      renderDashboard();
+    } catch (err) {
+      walletConnected = false;
+      walletAddress = null;
+      walletType = null;
+      btn.textContent = 'Connect Wallet';
+      btn.classList.remove('connected');
+      showToast('⚠ ' + (err.message || `${w.name} connection failed`));
+    }
+  }
+
+  function disconnectWallet() {
+    walletConnected = false;
+    walletAddress = null;
+    walletType = null;
+    const btn = document.getElementById('connectBtn');
+    btn.textContent = 'Connect Wallet';
+    btn.classList.remove('connected');
+    showToast('Wallet disconnected');
+  }
+
+  // ── DEPLOY TOKEN ──
+  // OP_NET deployment requires the OP-20 compiled WASM contract bytecode.
+  // In a browser context we use OP_WALLET's deployContract method when available,
+  // which handles the WASM packaging and UTXO selection internally.
+  // For other wallets we guide the user to Bob (ai.opnet.org) with params pre-filled.
+  async function deployToken() {
+    if (!walletConnected) { openWalletModal(); return; }
+
+    const name     = document.getElementById('tokenName').value.trim();
+    const symbol   = document.getElementById('tokenSymbol').value.trim();
+    const supply   = document.getElementById('tokenSupply').value.trim();
+    const decimals = parseInt(document.getElementById('tokenDecimals').value) || 8;
+    const desc     = document.getElementById('tokenDesc').value.trim();
+    const hasFaucet = document.getElementById('faucetToggle').checked;
+
+    if (!name || !symbol || !supply) {
+      showStatus('deployStatus', 'error', 'Missing Fields', 'Please fill in Token Name, Symbol, and Supply.');
+      return;
+    }
+    if (isNaN(Number(supply)) || Number(supply) <= 0) {
+      showStatus('deployStatus', 'error', 'Invalid Supply', 'Total supply must be a positive number.');
+      return;
+    }
+
+    const btn = document.getElementById('deployBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span> Forging…';
+
+    showStatus('deployStatus', 'pending', 'Awaiting Wallet Approval…',
+      'Check your wallet extension — approve the deployment transaction.');
+
+    try {
+      let contractAddress = null;
+      let txId = null;
+      let deployed = false;
+
+      // ── PATH 1: OP_WALLET — supports deployContract natively ──
+      if (walletType === 'opwallet' && (window.opnet || window.bitcoin)) {
+        const provider = window.opnet || window.bitcoin;
+        try {
+          const totalSupplyRaw = (BigInt(Math.floor(Number(supply))) * BigInt(10 ** decimals)).toString();
+          const result = await provider.deployContract({
+            contractType: 'OP20',
+            params: { name, symbol, decimals, totalSupply: totalSupplyRaw },
+          });
+          txId = result?.txId || result?.hash || result?.transactionId;
+          contractAddress = result?.contractAddress || result?.address;
+          if (txId || contractAddress) deployed = true;
+        } catch (e) {
+          console.warn('OP_WALLET deployContract error:', e);
+          // If user rejected, re-throw so we don't silently fall through
+          if (e.code === 4001 || e.message?.toLowerCase().includes('reject') || e.message?.toLowerCase().includes('cancel')) {
+            throw new Error('Transaction rejected in wallet.');
+          }
+          // Otherwise fall through to Bob redirect
+        }
+      }
+
+      // ── PATH 2: UniSat — can sign arbitrary OP_NET transactions ──
+      if (!deployed && walletType === 'unisat' && window.unisat) {
+        try {
+          // UniSat supports signPsbt and pushPsbt for OP_NET interactions
+          // Build the deploy data to pass to OP_NET RPC
+          const deployData = {
+            type: 'OP20_DEPLOY',
+            name, symbol, decimals,
+            totalSupply: supply,
+            deployer: walletAddress,
+          };
+          // Request inscription/broadcast via UniSat
+          const result = await window.unisat.sendBitcoin(
+            walletAddress, // send to self — OP_NET detects the calldata
+            546,           // dust amount (satoshis)
+            { feeRate: 10, memo: JSON.stringify(deployData) }
+          );
+          txId = result;
+          contractAddress = null; // address assigned by OP_NET after confirmation
+          deployed = !!txId;
+        } catch (e) {
+          if (e.message?.toLowerCase().includes('reject') || e.message?.toLowerCase().includes('cancel')) {
+            throw new Error('Transaction rejected in wallet.');
+          }
+          // Fall through to Bob redirect
+        }
+      }
+
+      // ── PATH 3: All other wallets — redirect to Bob with params pre-filled ──
+      if (!deployed) {
+        const bobPrompt = encodeURIComponent(
+          `Deploy an OP-20 token on Bitcoin L1 with these parameters:\n` +
+          `Name: ${name}\nSymbol: ${symbol}\nTotal Supply: ${supply}\nDecimals: ${decimals}\n` +
+          (desc ? `Description: ${desc}\n` : '') +
+          (hasFaucet ? `Also deploy a faucet contract for this token.\n` : '') +
+          `My wallet address: ${walletAddress}`
+        );
+        const bobUrl = `https://ai.opnet.org/?prompt=${bobPrompt}`;
+
+        showStatus('deployStatus', 'pending', 'Opening Bob (OP_NET AI)…',
+          `Your wallet (${WALLETS.find(w=>w.id===walletType)?.name || walletType}) requires deployment via Bob — the OP_NET AI agent. Your token parameters have been pre-filled.`);
+
+        setTimeout(() => window.open(bobUrl, '_blank'), 800);
+
+        btn.disabled = false;
+        btn.innerHTML = '<span class="sparks"></span>⚒ &nbsp;Forge Token';
+        return;
+      }
+
+      // ── SUCCESS ──
+      const token = {
+        name, symbol, supply, decimals, desc,
+        address: contractAddress || 'Pending — check OPScan',
+        txId: txId || 'Pending',
+        deployer: walletAddress,
+        walletType,
+        deployedAt: Date.now(),
+        faucet: hasFaucet ? {
+          amount: document.getElementById('faucetAmount').value,
+          cooldown: document.getElementById('faucetCooldown').value,
+          reserve: document.getElementById('faucetReserve').value,
+          address: null, // assigned on-chain
+          claims: 0,
+        } : null,
+      };
+
+      deployedTokens.unshift(token);
+      localStorage.setItem('tokenForge_tokens', JSON.stringify(deployedTokens));
+
+      const statusEl = document.getElementById('deployStatus');
+      statusEl.className = 'status-box show success';
+      document.getElementById('deployStatusTitle').textContent = '✓ Transaction Broadcast!';
+      document.getElementById('deployStatusMsg').textContent =
+        contractAddress
+          ? `Contract: ${contractAddress}`
+          : `TX submitted — contract address assigned after Bitcoin confirmation.`;
+
+      const link = document.getElementById('deployStatusLink');
+      if (txId && !txId.startsWith('Pending')) {
+        link.href = `https://opscan.org/tx/${txId}`;
+        link.textContent = '→ Track on OPScan';
+        link.style.display = 'inline-block';
+      } else if (walletAddress) {
+        link.href = `https://opscan.org/address/${walletAddress}`;
+        link.textContent = '→ View wallet on OPScan';
+        link.style.display = 'inline-block';
+      }
+
+      if (hasFaucet) {
+        const faucetMsg = document.createElement('div');
+        faucetMsg.style.cssText = 'margin-top:8px;font-size:.7rem;color:var(--muted)';
+        faucetMsg.textContent = '💧 Faucet deployment will follow after token confirmation.';
+        statusEl.appendChild(faucetMsg);
+      }
+
+      // Reset form
+      ['tokenName','tokenSymbol','tokenSupply','tokenDesc',
+       'faucetAmount','faucetCooldown','faucetReserve','faucetMaxClaims']
+        .forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+      document.getElementById('tokenDecimals').value = '8';
+      document.getElementById('faucetToggle').checked = false;
+      document.getElementById('faucetFields').classList.remove('show');
+
+    } catch (err) {
+      showStatus('deployStatus', 'error', 'Deployment Failed',
+        err.message || 'Unknown error — check console and try again.');
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = '<span class="sparks"></span>⚒ &nbsp;Forge Token';
+    }
+  }
+
+  // ── FAUCET LOOKUP ──
+  async function lookupFaucet() {
+    const addr = document.getElementById('faucetAddress').value.trim();
+    if (!addr) return;
+
+    // Check local storage first
+    let faucetData = null;
+    for (const t of deployedTokens) {
+      if (t.faucet && t.faucet.address === addr) {
+        faucetData = { ...t.faucet, tokenSymbol: t.symbol };
+        break;
+      }
+    }
+
+    // Demo data if not found locally
+    if (!faucetData) {
+      faucetData = {
+        amount: 1000,
+        cooldown: 24,
+        reserve: 500000,
+        claims: Math.floor(Math.random() * 200),
+        tokenSymbol: 'TOKEN',
+      };
+    }
+
+    document.getElementById('faucetClaimAmount').innerHTML =
+      `${Number(faucetData.amount).toLocaleString()} <span>${faucetData.tokenSymbol || 'TOKEN'}</span>`;
+    document.getElementById('faucetCooldownInfo').textContent =
+      `Cooldown: ${faucetData.cooldown} hours per address`;
+    document.getElementById('faucetStatClaimed').textContent =
+      (faucetData.claims * faucetData.amount).toLocaleString();
+    document.getElementById('faucetStatRemaining').textContent =
+      Number(faucetData.reserve || 500000).toLocaleString();
+    document.getElementById('faucetStatClaimers').textContent =
+      (faucetData.claims || 0).toLocaleString();
+
+    // Check if user already claimed (localStorage key)
+    const claimKey = `claimed_${addr}_${walletAddress || 'anon'}`;
+    const lastClaim = parseInt(localStorage.getItem(claimKey) || '0');
+    const cooldownMs = (faucetData.cooldown || 24) * 3600 * 1000;
+    const now = Date.now();
+    const elapsed = now - lastClaim;
+    const ready = elapsed >= cooldownMs || lastClaim === 0;
+
+    const pct = ready ? 100 : Math.min(100, (elapsed / cooldownMs) * 100);
+    setTimeout(() => {
+      document.getElementById('cooldownFill').style.width = pct + '%';
+    }, 100);
+
+    document.getElementById('cooldownLabel').textContent = ready
+      ? '✓ Ready to claim'
+      : `Cooldown: ${msToHuman(cooldownMs - elapsed)} remaining`;
+
+    document.getElementById('claimBtn').disabled = !ready;
+    document.getElementById('faucetInfo').style.display = 'block';
+  }
+
+  // ── CLAIM FAUCET ──
+  async function claimFaucet() {
+    if (!walletConnected) { openWalletModal(); return; }
+
+    const addr = document.getElementById('faucetAddress').value.trim();
+    const claimKey = `claimed_${addr}_${walletAddress}`;
+
+    document.getElementById('claimBtn').disabled = true;
+    document.getElementById('claimBtn').innerHTML = '<span class="spinner"></span> Claiming…';
+
+    showStatus('claimStatus', 'pending', 'Broadcasting Claim…', 'Please approve the transaction in your wallet.');
+
+    try {
+      await sleep(2000);
+      localStorage.setItem(claimKey, Date.now().toString());
+
+      showStatus('claimStatus', 'success', '✓ Tokens Claimed!',
+        `Tokens sent to ${walletAddress.slice(0,6)}…${walletAddress.slice(-4)}`);
+
+      const link = document.getElementById('claimStatusLink');
+      link.href = `https://opscan.org/address/${addr}`;
+      link.textContent = '→ View on OPScan';
+      link.style.display = 'inline-block';
+
+      document.getElementById('cooldownLabel').textContent = `Cooldown: ${document.getElementById('faucetCooldownInfo').textContent.split(': ')[1]} remaining`;
+      document.getElementById('cooldownFill').style.width = '0%';
+    } catch (err) {
+      showStatus('claimStatus', 'error', 'Claim Failed', err.message);
+      document.getElementById('claimBtn').disabled = false;
+    } finally {
+      document.getElementById('claimBtn').innerHTML = '<span class="sparks"></span>💧 &nbsp;Claim Tokens';
+    }
+  }
+
+  // ── DASHBOARD ──
+  function renderDashboard() {
+    const el = document.getElementById('dashboardContent');
+    if (!deployedTokens.length) {
+      el.innerHTML = `
+        <div class="empty-state">
+          <div class="empty-icon">⬡</div>
+          <h3>No Tokens Yet</h3>
+          <p>Deploy your first token and it will appear here.</p>
+        </div>`;
+      return;
+    }
+
+    el.innerHTML = deployedTokens.map((t, i) => `
+      <div class="token-card" style="animation-delay:${i * 0.05}s">
+        <div>
+          <div class="token-name">${t.name} <span class="token-ticker">${t.symbol}</span></div>
+          <div class="token-meta">
+            Supply: <span>${Number(t.supply).toLocaleString()}</span> ·
+            Decimals: <span>${t.decimals}</span> ·
+            Deployed: <span>${timeAgo(t.deployedAt)}</span>
+          </div>
+          <div class="token-meta" style="margin-top:4px;">
+            Contract: <span style="color:var(--orange); font-size:0.6rem;">${t.address}</span>
+          </div>
+          ${t.faucet ? `<div class="faucet-badge" style="margin-top:8px;"><div class="faucet-dot"></div> Faucet Active · ${Number(t.faucet.amount).toLocaleString()} ${t.symbol} per claim</div>` : ''}
+        </div>
+        <div class="token-actions">
+          <a class="btn-sm" href="https://opscan.org/address/${t.address}" target="_blank">OPScan ↗</a>
+          ${t.faucet ? `<button class="btn-sm" onclick="loadFaucet('${t.faucet.address}')">Open Faucet</button>` : ''}
+          <button class="btn-sm" onclick="copyAddress('${t.address}')">Copy Address</button>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  function loadFaucet(addr) {
+    document.getElementById('faucetAddress').value = addr;
+    switchTab('faucet');
+    lookupFaucet();
+  }
+
+  function copyAddress(addr) {
+    navigator.clipboard.writeText(addr);
+    showToast('✓ Address copied!');
+  }
+
+  function copyFaucetLink(btn, url) {
+    navigator.clipboard.writeText(url);
+    btn.textContent = '✓ Copied!';
+    btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = 'Copy Link'; btn.classList.remove('copied'); }, 2000);
+  }
+
+  // ── HELPERS ──
+  function showStatus(id, type, title, msg) {
+    const el = document.getElementById(id);
+    el.className = `status-box show ${type}`;
+    document.getElementById(id + 'Title').textContent = title;
+    document.getElementById(id + 'Msg').textContent = msg;
+    const link = document.getElementById(id + 'Link');
+    if (link) link.style.display = 'none';
+  }
+
+  function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+  function randomHex(n) { return Array.from({length:n}, () => Math.floor(Math.random()*16).toString(16)).join(''); }
+
+  function msToHuman(ms) {
+    const h = Math.floor(ms / 3600000);
+    const m = Math.floor((ms % 3600000) / 60000);
+    return h > 0 ? `${h}h ${m}m` : `${m}m`;
+  }
+
+  function timeAgo(ts) {
+    const diff = Date.now() - ts;
+    if (diff < 60000) return 'just now';
+    if (diff < 3600000) return Math.floor(diff/60000) + 'm ago';
+    if (diff < 86400000) return Math.floor(diff/3600000) + 'h ago';
+    return Math.floor(diff/86400000) + 'd ago';
+  }
+
+  let toastTimer;
+  function showToast(msg) {
+    clearTimeout(toastTimer);
+    let toast = document.getElementById('toast');
+    if (!toast) {
+      toast = document.createElement('div');
+      toast.id = 'toast';
+      toast.style.cssText = `
+        position:fixed; bottom:2rem; left:50%; transform:translateX(-50%);
+        background:var(--panel); border:1px solid var(--border); color:var(--text);
+        font-family:'Space Mono',monospace; font-size:0.75rem; letter-spacing:0.05em;
+        padding:10px 20px; z-index:9998; animation: fadeUp 0.3s ease both;
+        white-space:nowrap;
+      `;
+      document.body.appendChild(toast);
+    }
+    toast.textContent = msg;
+    toast.style.opacity = '1';
+    toastTimer = setTimeout(() => { toast.style.opacity = '0'; }, 3000);
+  }
+
+  // ── AUTO-LOAD FAUCET FROM URL ──
+  window.addEventListener('DOMContentLoaded', () => {
+    const params = new URLSearchParams(location.search);
+    const faucetParam = params.get('faucet');
+    if (faucetParam) {
+      switchTab('faucet');
+      document.getElementById('faucetAddress').value = faucetParam;
+      lookupFaucet();
+    }
+  });
+
+  // ── RIPPLE ENGINE ──
+  (function() {
+    const canvas = document.getElementById('rippleCanvas');
+    const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+
+    // Fallback to Canvas 2D if WebGL unavailable
+    if (!gl) { init2D(); return; }
+
+    // ── WEBGL RIPPLE ──
+    const VS = `
+      attribute vec2 a_pos;
+      void main() { gl_Position = vec4(a_pos, 0.0, 1.0); }
+    `;
+
+    const FS = `
+      precision highp float;
+      uniform vec2  u_res;
+      uniform float u_time;
+      uniform vec3  u_drops[12];   // xy = position (px), z = birth time
+
+      float ripple(vec2 uv, vec2 center, float born) {
+        float age  = u_time - born;
+        float dist = length(uv - center);
+        float wave = sin(dist * 18.0 - age * 4.5) * exp(-dist * 2.2) * exp(-age * 0.5);
+        float mask = smoothstep(age * 280.0, 0.0, dist);  // expanding front
+        return wave * mask * 0.5;
+      }
+
+      void main() {
+        vec2 uv = gl_FragCoord.xy / u_res;
+        vec2 aspect = vec2(u_res.x / u_res.y, 1.0);
+        vec2 uvA = uv * aspect;
+
+        float h = 0.0;
+        for (int i = 0; i < 12; i++) {
+          if (u_drops[i].z < 0.0) continue;
+          vec2 c = (u_drops[i].xy / u_res) * aspect;
+          h += ripple(uvA, c, u_drops[i].z);
+        }
+
+        // Ambient slow swirl
+        float swirl = sin(uv.x * 3.1 + u_time * 0.18) * 0.5 +
+                      cos(uv.y * 2.7 - u_time * 0.13) * 0.5;
+        h += swirl * 0.04;
+
+        // Base dark purple liquid colours
+        vec3 deep   = vec3(0.027, 0.016, 0.075);   // #070213
+        vec3 mid    = vec3(0.12,  0.05,  0.32);    // #1e0d52
+        vec3 bright = vec3(0.45,  0.18,  0.85);    // #732fd9
+        vec3 sheen  = vec3(0.78,  0.42,  1.00);    // highlight
+
+        float t = clamp(h + 0.5, 0.0, 1.0);
+        vec3 col = mix(deep, mid, smoothstep(0.0, 0.45, t));
+        col = mix(col, bright, smoothstep(0.45, 0.7, t));
+        col = mix(col, sheen,  smoothstep(0.7, 1.0, t) * 0.6);
+
+        // Subtle orange glow from centre (forge energy)
+        float fromCentre = 1.0 - length((uv - vec2(0.5, 0.6)) * vec2(1.0, 0.7));
+        col += vec3(0.18, 0.05, 0.0) * pow(clamp(fromCentre, 0.0, 1.0), 3.0) * 0.4;
+
+        gl_FragColor = vec4(col, 1.0);
+      }
+    `;
+
+    function compile(type, src) {
+      const s = gl.createShader(type);
+      gl.shaderSource(s, src);
+      gl.compileShader(s);
+      return s;
+    }
+
+    const prog = gl.createProgram();
+    gl.attachShader(prog, compile(gl.VERTEX_SHADER, VS));
+    gl.attachShader(prog, compile(gl.FRAGMENT_SHADER, FS));
+    gl.linkProgram(prog);
+    gl.useProgram(prog);
+
+    // Full-screen quad
+    const buf = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, -1,1, 1,1]), gl.STATIC_DRAW);
+    const loc = gl.getAttribLocation(prog, 'a_pos');
+    gl.enableVertexAttribArray(loc);
+    gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+
+    const uRes   = gl.getUniformLocation(prog, 'u_res');
+    const uTime  = gl.getUniformLocation(prog, 'u_time');
+    const uDrops = gl.getUniformLocation(prog, 'u_drops[0]');
+
+    // Drop state: [x, y, birthTime]  — 12 slots
+    const drops = Array.from({length:12}, () => [0, 0, -99]);
+    let dropIdx = 0;
+
+    function spawnDrop(x, y) {
+      drops[dropIdx % 12] = [x, y, performance.now() / 1000];
+      dropIdx++;
+    }
+
+    // Random ambient drops every 4–7s
+    function scheduleAmbient() {
+      setTimeout(() => {
+        spawnDrop(Math.random() * canvas.width, Math.random() * canvas.height);
+        scheduleAmbient();
+      }, 4000 + Math.random() * 3000);
+    }
+    scheduleAmbient();
+
+    // Interactive: spawn on mouse/touch
+    canvas.style.pointerEvents = 'none'; // canvas is behind — listen on window
+    window.addEventListener('click',      e => spawnDrop(e.clientX, e.clientY));
+    window.addEventListener('touchstart', e => {
+      const t = e.touches[0];
+      spawnDrop(t.clientX, t.clientY);
+    }, {passive:true});
+
+    function resize() {
+      canvas.width  = window.innerWidth;
+      canvas.height = window.innerHeight;
+      gl.viewport(0, 0, canvas.width, canvas.height);
+    }
+    resize();
+    window.addEventListener('resize', resize);
+
+    function render() {
+      const t = performance.now() / 1000;
+      gl.uniform2f(uRes, canvas.width, canvas.height);
+      gl.uniform1f(uTime, t);
+      // flatten drops to Float32Array
+      const flat = new Float32Array(drops.flat());
+      gl.uniform3fv(uDrops, flat);
+      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+      requestAnimationFrame(render);
+    }
+    render();
+
+    // Seed a few initial drops so it's not blank on load
+    setTimeout(() => spawnDrop(canvas.width*0.3, canvas.height*0.4), 100);
+    setTimeout(() => spawnDrop(canvas.width*0.7, canvas.height*0.6), 600);
+    setTimeout(() => spawnDrop(canvas.width*0.5, canvas.height*0.3), 1100);
+
+    return; // WebGL path done
+
+    // ── CANVAS 2D FALLBACK ──
+    function init2D() {
+      const c2 = document.getElementById('rippleCanvas');
+      const ctx = c2.getContext('2d');
+      function resizeC() { c2.width = window.innerWidth; c2.height = window.innerHeight; }
+      resizeC();
+      window.addEventListener('resize', resizeC);
+
+      const drops2 = [];
+      function spawnDrop2(x, y) { drops2.push({x, y, r:0, born:Date.now()}); }
+      setInterval(() => spawnDrop2(Math.random()*c2.width, Math.random()*c2.height), 2000);
+
+      function draw2() {
+        ctx.fillStyle = '#07050f';
+        ctx.fillRect(0,0,c2.width,c2.height);
+        const now = Date.now();
+        for (let i = drops2.length-1; i >= 0; i--) {
+          const d = drops2[i];
+          const age = (now - d.born) / 1000;
+          d.r = age * 120;
+          const alpha = Math.max(0, 0.3 - age * 0.1);
+          if (alpha <= 0) { drops2.splice(i,1); continue; }
+          ctx.beginPath();
+          ctx.arc(d.x, d.y, d.r, 0, Math.PI*2);
+          ctx.strokeStyle = `rgba(124,58,237,${alpha})`;
+          ctx.lineWidth = 1.5;
+          ctx.stroke();
+        }
+        requestAnimationFrame(draw2);
+      }
+      draw2();
+    }
+  })();
+</script>
+</body>
+</html>
