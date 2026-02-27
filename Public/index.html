@@ -8,16 +8,18 @@
   <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet" />
   <style>
     :root {
-      --bg:        #0a0806;
-      --surface:   #110f0c;
-      --panel:     #1a1612;
-      --border:    #2e2820;
+      --bg:        #07050f;
+      --surface:   #0e0b1a;
+      --panel:     #130f22;
+      --border:    #2a1f45;
       --orange:    #f97316;
       --gold:      #f59e0b;
       --ember:     #ef4444;
       --text:      #e8ddd0;
-      --muted:     #7a6e62;
+      --muted:     #7a6e8a;
       --success:   #22c55e;
+      --purple:    #7c3aed;
+      --purple-mid:#4c1d95;
     }
 
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -30,18 +32,25 @@
       overflow-x: hidden;
     }
 
-    /* Forge glow background */
+    /* Ripple canvas sits fixed behind everything */
+    #rippleCanvas {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 0;
+      pointer-events: none;
+    }
+
+    /* Dark vignette over the canvas so content stays readable */
     body::before {
       content: '';
       position: fixed;
-      bottom: -200px;
-      left: 50%;
-      transform: translateX(-50%);
-      width: 800px;
-      height: 400px;
-      background: radial-gradient(ellipse at center, rgba(249,115,22,0.12) 0%, rgba(239,68,68,0.06) 40%, transparent 70%);
+      inset: 0;
+      background:
+        radial-gradient(ellipse at 50% 50%, transparent 20%, rgba(7,5,15,0.75) 100%);
       pointer-events: none;
-      z-index: 0;
+      z-index: 1;
     }
 
     /* Scanlines overlay */
@@ -49,7 +58,7 @@
       content: '';
       position: fixed;
       inset: 0;
-      background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.03) 2px, rgba(0,0,0,0.03) 4px);
+      background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.04) 2px, rgba(0,0,0,0.04) 4px);
       pointer-events: none;
       z-index: 9999;
     }
@@ -64,7 +73,7 @@
       align-items: center;
       justify-content: space-between;
       height: 64px;
-      background: rgba(10,8,6,0.9);
+      background: rgba(7,5,15,0.92);
       backdrop-filter: blur(12px);
     }
 
@@ -173,7 +182,7 @@
     /* ── MAIN ── */
     main {
       position: relative;
-      z-index: 1;
+      z-index: 2;
       max-width: 960px;
       margin: 0 auto;
       padding: 3rem 2rem 6rem;
@@ -727,7 +736,7 @@
     /* ── FOOTER ── */
     footer {
       position: relative;
-      z-index: 1;
+      z-index: 2;
       border-top: 1px solid var(--border);
       padding: 1.5rem 2rem;
       display: flex;
@@ -883,6 +892,8 @@
   </style>
 </head>
 <body>
+
+<canvas id="rippleCanvas"></canvas>
 
 <!-- ── HEADER ── -->
 <header>
@@ -1545,6 +1556,182 @@
       lookupFaucet();
     }
   });
+
+  // ── RIPPLE ENGINE ──
+  (function() {
+    const canvas = document.getElementById('rippleCanvas');
+    const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+
+    // Fallback to Canvas 2D if WebGL unavailable
+    if (!gl) { init2D(); return; }
+
+    // ── WEBGL RIPPLE ──
+    const VS = `
+      attribute vec2 a_pos;
+      void main() { gl_Position = vec4(a_pos, 0.0, 1.0); }
+    `;
+
+    const FS = `
+      precision highp float;
+      uniform vec2  u_res;
+      uniform float u_time;
+      uniform vec3  u_drops[12];   // xy = position (px), z = birth time
+
+      float ripple(vec2 uv, vec2 center, float born) {
+        float age  = u_time - born;
+        float dist = length(uv - center);
+        float wave = sin(dist * 18.0 - age * 4.5) * exp(-dist * 2.2) * exp(-age * 0.5);
+        float mask = smoothstep(age * 280.0, 0.0, dist);  // expanding front
+        return wave * mask * 0.5;
+      }
+
+      void main() {
+        vec2 uv = gl_FragCoord.xy / u_res;
+        vec2 aspect = vec2(u_res.x / u_res.y, 1.0);
+        vec2 uvA = uv * aspect;
+
+        float h = 0.0;
+        for (int i = 0; i < 12; i++) {
+          if (u_drops[i].z < 0.0) continue;
+          vec2 c = (u_drops[i].xy / u_res) * aspect;
+          h += ripple(uvA, c, u_drops[i].z);
+        }
+
+        // Ambient slow swirl
+        float swirl = sin(uv.x * 3.1 + u_time * 0.18) * 0.5 +
+                      cos(uv.y * 2.7 - u_time * 0.13) * 0.5;
+        h += swirl * 0.04;
+
+        // Base dark purple liquid colours
+        vec3 deep   = vec3(0.027, 0.016, 0.075);   // #070213
+        vec3 mid    = vec3(0.12,  0.05,  0.32);    // #1e0d52
+        vec3 bright = vec3(0.45,  0.18,  0.85);    // #732fd9
+        vec3 sheen  = vec3(0.78,  0.42,  1.00);    // highlight
+
+        float t = clamp(h + 0.5, 0.0, 1.0);
+        vec3 col = mix(deep, mid, smoothstep(0.0, 0.45, t));
+        col = mix(col, bright, smoothstep(0.45, 0.7, t));
+        col = mix(col, sheen,  smoothstep(0.7, 1.0, t) * 0.6);
+
+        // Subtle orange glow from centre (forge energy)
+        float fromCentre = 1.0 - length((uv - vec2(0.5, 0.6)) * vec2(1.0, 0.7));
+        col += vec3(0.18, 0.05, 0.0) * pow(clamp(fromCentre, 0.0, 1.0), 3.0) * 0.4;
+
+        gl_FragColor = vec4(col, 1.0);
+      }
+    `;
+
+    function compile(type, src) {
+      const s = gl.createShader(type);
+      gl.shaderSource(s, src);
+      gl.compileShader(s);
+      return s;
+    }
+
+    const prog = gl.createProgram();
+    gl.attachShader(prog, compile(gl.VERTEX_SHADER, VS));
+    gl.attachShader(prog, compile(gl.FRAGMENT_SHADER, FS));
+    gl.linkProgram(prog);
+    gl.useProgram(prog);
+
+    // Full-screen quad
+    const buf = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, -1,1, 1,1]), gl.STATIC_DRAW);
+    const loc = gl.getAttribLocation(prog, 'a_pos');
+    gl.enableVertexAttribArray(loc);
+    gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+
+    const uRes   = gl.getUniformLocation(prog, 'u_res');
+    const uTime  = gl.getUniformLocation(prog, 'u_time');
+    const uDrops = gl.getUniformLocation(prog, 'u_drops[0]');
+
+    // Drop state: [x, y, birthTime]  — 12 slots
+    const drops = Array.from({length:12}, () => [0, 0, -99]);
+    let dropIdx = 0;
+
+    function spawnDrop(x, y) {
+      drops[dropIdx % 12] = [x, y, performance.now() / 1000];
+      dropIdx++;
+    }
+
+    // Random ambient drops every 4–7s
+    function scheduleAmbient() {
+      setTimeout(() => {
+        spawnDrop(Math.random() * canvas.width, Math.random() * canvas.height);
+        scheduleAmbient();
+      }, 4000 + Math.random() * 3000);
+    }
+    scheduleAmbient();
+
+    // Interactive: spawn on mouse/touch
+    canvas.style.pointerEvents = 'none'; // canvas is behind — listen on window
+    window.addEventListener('click',      e => spawnDrop(e.clientX, e.clientY));
+    window.addEventListener('touchstart', e => {
+      const t = e.touches[0];
+      spawnDrop(t.clientX, t.clientY);
+    }, {passive:true});
+
+    function resize() {
+      canvas.width  = window.innerWidth;
+      canvas.height = window.innerHeight;
+      gl.viewport(0, 0, canvas.width, canvas.height);
+    }
+    resize();
+    window.addEventListener('resize', resize);
+
+    function render() {
+      const t = performance.now() / 1000;
+      gl.uniform2f(uRes, canvas.width, canvas.height);
+      gl.uniform1f(uTime, t);
+      // flatten drops to Float32Array
+      const flat = new Float32Array(drops.flat());
+      gl.uniform3fv(uDrops, flat);
+      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+      requestAnimationFrame(render);
+    }
+    render();
+
+    // Seed a few initial drops so it's not blank on load
+    setTimeout(() => spawnDrop(canvas.width*0.3, canvas.height*0.4), 100);
+    setTimeout(() => spawnDrop(canvas.width*0.7, canvas.height*0.6), 600);
+    setTimeout(() => spawnDrop(canvas.width*0.5, canvas.height*0.3), 1100);
+
+    return; // WebGL path done
+
+    // ── CANVAS 2D FALLBACK ──
+    function init2D() {
+      const c2 = document.getElementById('rippleCanvas');
+      const ctx = c2.getContext('2d');
+      function resizeC() { c2.width = window.innerWidth; c2.height = window.innerHeight; }
+      resizeC();
+      window.addEventListener('resize', resizeC);
+
+      const drops2 = [];
+      function spawnDrop2(x, y) { drops2.push({x, y, r:0, born:Date.now()}); }
+      setInterval(() => spawnDrop2(Math.random()*c2.width, Math.random()*c2.height), 2000);
+
+      function draw2() {
+        ctx.fillStyle = '#07050f';
+        ctx.fillRect(0,0,c2.width,c2.height);
+        const now = Date.now();
+        for (let i = drops2.length-1; i >= 0; i--) {
+          const d = drops2[i];
+          const age = (now - d.born) / 1000;
+          d.r = age * 120;
+          const alpha = Math.max(0, 0.3 - age * 0.1);
+          if (alpha <= 0) { drops2.splice(i,1); continue; }
+          ctx.beginPath();
+          ctx.arc(d.x, d.y, d.r, 0, Math.PI*2);
+          ctx.strokeStyle = `rgba(124,58,237,${alpha})`;
+          ctx.lineWidth = 1.5;
+          ctx.stroke();
+        }
+        requestAnimationFrame(draw2);
+      }
+      draw2();
+    }
+  })();
 </script>
 </body>
 </html>
