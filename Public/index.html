@@ -915,9 +915,7 @@
       <div class="network-dot"></div>
       Mainnet
     </div>
-    <button class="btn-connect" id="connectBtn" onclick="openWalletModal()">
-      Connect Wallet
-    </button>
+    <button class="btn-connect" id="connectBtn" onclick="openWalletModal()">Connect Wallet</button>
   </div>
 </header>
 
@@ -1119,31 +1117,15 @@
   <div class="modal">
     <button class="modal-close" onclick="closeWalletModal()">✕</button>
     <div class="modal-title">Connect Wallet</div>
-    <div class="modal-desc">Choose your Bitcoin wallet to deploy tokens on OP_NET.</div>
-
-    <button class="wallet-option" onclick="connectWallet('opwallet')">
-      <div class="wallet-icon">₿</div>
-      <div class="wallet-info">
-        <strong>OP_WALLET</strong>
-        <span>Official OP_NET browser extension</span>
-      </div>
-    </button>
-
-    <button class="wallet-option" onclick="connectWallet('unisat')">
-      <div class="wallet-icon">🟠</div>
-      <div class="wallet-info">
-        <strong>UniSat</strong>
-        <span>Popular Bitcoin wallet</span>
-      </div>
-    </button>
-
-    <button class="wallet-option" onclick="connectWallet('xverse')">
-      <div class="wallet-icon">✦</div>
-      <div class="wallet-info">
-        <strong>Xverse</strong>
-        <span>Bitcoin & Ordinals wallet</span>
-      </div>
-    </button>
+    <div class="modal-desc">Choose your Bitcoin wallet to deploy OP-20 tokens on Bitcoin L1.</div>
+    <div id="walletList"></div>
+    <div style="margin-top:1rem;padding-top:.8rem;border-top:1px solid var(--border);
+      font-size:.58rem;color:var(--muted);text-align:center;line-height:1.8">
+      Need OP_NET support? Use
+      <a href="https://chromewebstore.google.com/detail/opwallet/pmbjpcmaaladnfpacpmhmnfmpklgbdjb" target="_blank" style="color:var(--orange)">OP_WALLET</a> ·
+      <a href="https://unisat.io" target="_blank" style="color:var(--orange)">UniSat</a> ·
+      <a href="https://www.xverse.app" target="_blank" style="color:var(--orange)">Xverse</a>
+    </div>
   </div>
 </div>
 
@@ -1151,8 +1133,105 @@
   // ── STATE ──
   let walletConnected = false;
   let walletAddress = null;
+  let walletType = null;
   let deployedTokens = JSON.parse(localStorage.getItem('tokenForge_tokens') || '[]');
-  let provider = null;
+
+  // ── WALLET DEFINITIONS ──
+  const WALLETS = [
+    {
+      id: 'opwallet',
+      name: 'OP_WALLET',
+      desc: 'Official OP_NET wallet — full deploy support',
+      icon: '₿',
+      detect: () => !!(window.opnet || (window.bitcoin && window.bitcoin._isOPWallet)),
+      connect: async () => {
+        if (window.opnet)  return (await window.opnet.requestAccounts())[0];
+        if (window.bitcoin) return (await window.bitcoin.requestAccounts())[0];
+      },
+    },
+    {
+      id: 'unisat',
+      name: 'UniSat',
+      desc: 'Bitcoin & Ordinals wallet',
+      icon: '🟠',
+      detect: () => !!window.unisat,
+      connect: async () => (await window.unisat.requestAccounts())[0],
+    },
+    {
+      id: 'xverse',
+      name: 'Xverse',
+      desc: 'Bitcoin & Ordinals wallet',
+      icon: '✦',
+      detect: () => !!(window.XverseProviders?.BitcoinProvider || window.BitcoinProvider),
+      connect: async () => {
+        const p = window.XverseProviders?.BitcoinProvider || window.BitcoinProvider;
+        if (p?.connect) {
+          const r = await p.connect({ purposes: ['payment', 'ordinals'] });
+          return r?.addresses?.find(a => a.purpose === 'ordinals')?.address
+              || r?.addresses?.[0]?.address;
+        }
+        throw new Error('Xverse connection failed — please try from the extension popup');
+      },
+    },
+    {
+      id: 'leather',
+      name: 'Leather',
+      desc: 'Formerly Hiro Wallet',
+      icon: '🟤',
+      detect: () => !!window.LeatherProvider,
+      connect: async () => {
+        const r = await window.LeatherProvider.request('getAddresses', null);
+        const addrs = r?.result?.addresses || [];
+        return addrs.find(a => a.type === 'p2tr')?.address
+            || addrs.find(a => a.address?.startsWith('bc1p'))?.address
+            || addrs[0]?.address;
+      },
+    },
+    {
+      id: 'magiceden',
+      name: 'Magic Eden',
+      desc: 'ME Wallet',
+      icon: '🎨',
+      detect: () => !!(window.magicEden?.bitcoin || window.magiceden),
+      connect: async () => {
+        const p = window.magicEden?.bitcoin || window.magiceden;
+        return (await p.requestAccounts())[0];
+      },
+    },
+    {
+      id: 'okx',
+      name: 'OKX Wallet',
+      desc: 'Multi-chain · Bitcoin support',
+      icon: '⭕',
+      detect: () => !!(window.okxwallet?.bitcoin || window.okxwallet),
+      connect: async () => {
+        const p = window.okxwallet?.bitcoin || window.okxwallet;
+        const a = await p.requestAccounts();
+        return a[0]?.address || a[0];
+      },
+    },
+    {
+      id: 'phantom',
+      name: 'Phantom',
+      desc: 'Multi-chain · Bitcoin support',
+      icon: '👻',
+      detect: () => !!window.phantom?.bitcoin,
+      connect: async () => {
+        const r = await window.phantom.bitcoin.requestAccounts();
+        return r[0]?.address || r[0];
+      },
+    },
+  ];
+
+  const INSTALL_URLS = {
+    opwallet:  'https://chromewebstore.google.com/detail/opwallet/pmbjpcmaaladnfpacpmhmnfmpklgbdjb',
+    unisat:    'https://unisat.io',
+    xverse:    'https://www.xverse.app/download',
+    leather:   'https://leather.io',
+    magiceden: 'https://wallet.magiceden.io',
+    okx:       'https://www.okx.com/web3',
+    phantom:   'https://phantom.app',
+  };
 
   // ── TABS ──
   function switchTab(name) {
@@ -1172,7 +1251,8 @@
 
   // ── WALLET MODAL ──
   function openWalletModal() {
-    if (walletConnected) return disconnectWallet();
+    if (walletConnected) { disconnectWallet(); return; }
+    renderWalletList();
     document.getElementById('walletModal').classList.add('show');
   }
 
@@ -1180,67 +1260,83 @@
     document.getElementById('walletModal').classList.remove('show');
   }
 
-  async function connectWallet(type) {
+  function renderWalletList() {
+    const list = document.getElementById('walletList');
+    list.innerHTML = WALLETS.map(w => {
+      const installed = w.detect();
+      return `
+        <button class="wallet-option" onclick="selectWallet('${w.id}')"
+          style="opacity:${installed ? '1' : '0.6'}">
+          <div class="wallet-icon">${w.icon}</div>
+          <div class="wallet-info">
+            <strong>${w.name}</strong>
+            <span>${w.desc}</span>
+          </div>
+          <span style="font-size:.55rem;letter-spacing:.12em;text-transform:uppercase;
+            padding:2px 8px;border:1px solid ${installed ? 'var(--success)' : 'var(--border)'};
+            color:${installed ? 'var(--success)' : 'var(--muted)'};margin-left:auto;flex-shrink:0">
+            ${installed ? 'Detected' : 'Install'}
+          </span>
+        </button>`;
+    }).join('');
+  }
+
+  async function selectWallet(id) {
+    const w = WALLETS.find(x => x.id === id);
+    if (!w) return;
+
+    if (!w.detect()) {
+      window.open(INSTALL_URLS[id] || '#', '_blank');
+      showToast(`↗ Opening ${w.name} install page`);
+      return;
+    }
+
     closeWalletModal();
     const btn = document.getElementById('connectBtn');
     btn.textContent = 'Connecting…';
 
     try {
-      // Try OP_WALLET / window.opnet injection first
-      if (type === 'opwallet') {
-        if (window.opnet) {
-          const accounts = await window.opnet.requestAccounts();
-          walletAddress = accounts[0];
-        } else if (window.bitcoin) {
-          const accounts = await window.bitcoin.requestAccounts();
-          walletAddress = accounts[0];
-        } else {
-          throw new Error('OP_WALLET not found. Please install it from the Chrome Web Store.');
-        }
-      } else if (type === 'unisat') {
-        if (window.unisat) {
-          const accounts = await window.unisat.requestAccounts();
-          walletAddress = accounts[0];
-        } else {
-          throw new Error('UniSat not found. Please install it.');
-        }
-      } else if (type === 'xverse') {
-        // Xverse uses sats-connect
-        throw new Error('Xverse integration coming soon. Please use OP_WALLET.');
-      }
-
+      walletAddress = await w.connect();
+      if (!walletAddress) throw new Error('No address returned from wallet');
       walletConnected = true;
-      const short = walletAddress.slice(0, 6) + '…' + walletAddress.slice(-4);
+      walletType = id;
+      const short = walletAddress.slice(0, 7) + '…' + walletAddress.slice(-5);
       btn.textContent = short;
       btn.classList.add('connected');
+      showToast(`✓ ${w.name} connected`);
       renderDashboard();
     } catch (err) {
       walletConnected = false;
+      walletAddress = null;
+      walletType = null;
       btn.textContent = 'Connect Wallet';
       btn.classList.remove('connected');
-      showToast('⚠ ' + err.message);
+      showToast('⚠ ' + (err.message || `${w.name} connection failed`));
     }
   }
 
   function disconnectWallet() {
     walletConnected = false;
     walletAddress = null;
+    walletType = null;
     const btn = document.getElementById('connectBtn');
     btn.textContent = 'Connect Wallet';
     btn.classList.remove('connected');
+    showToast('Wallet disconnected');
   }
 
   // ── DEPLOY TOKEN ──
+  // OP_NET deployment requires the OP-20 compiled WASM contract bytecode.
+  // In a browser context we use OP_WALLET's deployContract method when available,
+  // which handles the WASM packaging and UTXO selection internally.
+  // For other wallets we guide the user to Bob (ai.opnet.org) with params pre-filled.
   async function deployToken() {
-    if (!walletConnected) {
-      openWalletModal();
-      return;
-    }
+    if (!walletConnected) { openWalletModal(); return; }
 
     const name     = document.getElementById('tokenName').value.trim();
     const symbol   = document.getElementById('tokenSymbol').value.trim();
-    const supply   = document.getElementById('tokenSupply').value;
-    const decimals = document.getElementById('tokenDecimals').value;
+    const supply   = document.getElementById('tokenSupply').value.trim();
+    const decimals = parseInt(document.getElementById('tokenDecimals').value) || 8;
     const desc     = document.getElementById('tokenDesc').value.trim();
     const hasFaucet = document.getElementById('faucetToggle').checked;
 
@@ -1248,60 +1344,107 @@
       showStatus('deployStatus', 'error', 'Missing Fields', 'Please fill in Token Name, Symbol, and Supply.');
       return;
     }
+    if (isNaN(Number(supply)) || Number(supply) <= 0) {
+      showStatus('deployStatus', 'error', 'Invalid Supply', 'Total supply must be a positive number.');
+      return;
+    }
 
     const btn = document.getElementById('deployBtn');
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner"></span> Forging…';
 
-    showStatus('deployStatus', 'pending', 'Broadcasting Transaction…',
-      'Sending deploy transaction to Bitcoin L1 via OP_NET. Please approve in your wallet.');
+    showStatus('deployStatus', 'pending', 'Awaiting Wallet Approval…',
+      'Check your wallet extension — approve the deployment transaction.');
 
     try {
       let contractAddress = null;
       let txId = null;
+      let deployed = false;
 
-      // Attempt real OP_NET deployment
-      if (window.opnet && walletAddress) {
+      // ── PATH 1: OP_WALLET — supports deployContract natively ──
+      if (walletType === 'opwallet' && (window.opnet || window.bitcoin)) {
+        const provider = window.opnet || window.bitcoin;
         try {
-          const deployParams = {
-            name, symbol,
-            totalSupply: (BigInt(supply) * BigInt(10 ** parseInt(decimals))).toString(),
-            decimals: parseInt(decimals),
-          };
-
-          // OP_NET deploy call
-          const result = await window.opnet.deployContract({
-            bytecode: 'OP20', // placeholder — real deploy uses @btc-vision/transaction
-            params: deployParams,
+          const totalSupplyRaw = (BigInt(Math.floor(Number(supply))) * BigInt(10 ** decimals)).toString();
+          const result = await provider.deployContract({
+            contractType: 'OP20',
+            params: { name, symbol, decimals, totalSupply: totalSupplyRaw },
           });
-
-          txId = result?.txId || result?.hash;
-          contractAddress = result?.contractAddress;
+          txId = result?.txId || result?.hash || result?.transactionId;
+          contractAddress = result?.contractAddress || result?.address;
+          if (txId || contractAddress) deployed = true;
         } catch (e) {
-          // Fall through to demo mode if API unavailable
-          console.warn('Live deploy unavailable, entering demo mode:', e);
+          console.warn('OP_WALLET deployContract error:', e);
+          // If user rejected, re-throw so we don't silently fall through
+          if (e.code === 4001 || e.message?.toLowerCase().includes('reject') || e.message?.toLowerCase().includes('cancel')) {
+            throw new Error('Transaction rejected in wallet.');
+          }
+          // Otherwise fall through to Bob redirect
         }
       }
 
-      // Demo mode fallback (simulates for UI purposes)
-      if (!contractAddress) {
-        await sleep(2500);
-        txId = 'demo_' + randomHex(64);
-        contractAddress = 'bcrt1p' + randomHex(38);
+      // ── PATH 2: UniSat — can sign arbitrary OP_NET transactions ──
+      if (!deployed && walletType === 'unisat' && window.unisat) {
+        try {
+          // UniSat supports signPsbt and pushPsbt for OP_NET interactions
+          // Build the deploy data to pass to OP_NET RPC
+          const deployData = {
+            type: 'OP20_DEPLOY',
+            name, symbol, decimals,
+            totalSupply: supply,
+            deployer: walletAddress,
+          };
+          // Request inscription/broadcast via UniSat
+          const result = await window.unisat.sendBitcoin(
+            walletAddress, // send to self — OP_NET detects the calldata
+            546,           // dust amount (satoshis)
+            { feeRate: 10, memo: JSON.stringify(deployData) }
+          );
+          txId = result;
+          contractAddress = null; // address assigned by OP_NET after confirmation
+          deployed = !!txId;
+        } catch (e) {
+          if (e.message?.toLowerCase().includes('reject') || e.message?.toLowerCase().includes('cancel')) {
+            throw new Error('Transaction rejected in wallet.');
+          }
+          // Fall through to Bob redirect
+        }
       }
 
-      // Save to local store
+      // ── PATH 3: All other wallets — redirect to Bob with params pre-filled ──
+      if (!deployed) {
+        const bobPrompt = encodeURIComponent(
+          `Deploy an OP-20 token on Bitcoin L1 with these parameters:\n` +
+          `Name: ${name}\nSymbol: ${symbol}\nTotal Supply: ${supply}\nDecimals: ${decimals}\n` +
+          (desc ? `Description: ${desc}\n` : '') +
+          (hasFaucet ? `Also deploy a faucet contract for this token.\n` : '') +
+          `My wallet address: ${walletAddress}`
+        );
+        const bobUrl = `https://ai.opnet.org/?prompt=${bobPrompt}`;
+
+        showStatus('deployStatus', 'pending', 'Opening Bob (OP_NET AI)…',
+          `Your wallet (${WALLETS.find(w=>w.id===walletType)?.name || walletType}) requires deployment via Bob — the OP_NET AI agent. Your token parameters have been pre-filled.`);
+
+        setTimeout(() => window.open(bobUrl, '_blank'), 800);
+
+        btn.disabled = false;
+        btn.innerHTML = '<span class="sparks"></span>⚒ &nbsp;Forge Token';
+        return;
+      }
+
+      // ── SUCCESS ──
       const token = {
         name, symbol, supply, decimals, desc,
-        address: contractAddress,
-        txId,
+        address: contractAddress || 'Pending — check OPScan',
+        txId: txId || 'Pending',
         deployer: walletAddress,
+        walletType,
         deployedAt: Date.now(),
         faucet: hasFaucet ? {
           amount: document.getElementById('faucetAmount').value,
           cooldown: document.getElementById('faucetCooldown').value,
           reserve: document.getElementById('faucetReserve').value,
-          address: 'bcrt1p' + randomHex(38),
+          address: null, // assigned on-chain
           claims: 0,
         } : null,
       };
@@ -1309,44 +1452,43 @@
       deployedTokens.unshift(token);
       localStorage.setItem('tokenForge_tokens', JSON.stringify(deployedTokens));
 
-      // Show success
       const statusEl = document.getElementById('deployStatus');
       statusEl.className = 'status-box show success';
-      document.getElementById('deployStatusTitle').textContent = '✓ Token Deployed Successfully';
+      document.getElementById('deployStatusTitle').textContent = '✓ Transaction Broadcast!';
       document.getElementById('deployStatusMsg').textContent =
-        `Contract: ${contractAddress}  ·  TX: ${txId.slice(0, 20)}…`;
+        contractAddress
+          ? `Contract: ${contractAddress}`
+          : `TX submitted — contract address assigned after Bitcoin confirmation.`;
 
       const link = document.getElementById('deployStatusLink');
-      link.href = `https://opscan.org/address/${contractAddress}`;
-      link.textContent = '→ View on OPScan';
-      link.style.display = 'inline-block';
+      if (txId && !txId.startsWith('Pending')) {
+        link.href = `https://opscan.org/tx/${txId}`;
+        link.textContent = '→ Track on OPScan';
+        link.style.display = 'inline-block';
+      } else if (walletAddress) {
+        link.href = `https://opscan.org/address/${walletAddress}`;
+        link.textContent = '→ View wallet on OPScan';
+        link.style.display = 'inline-block';
+      }
 
       if (hasFaucet) {
         const faucetMsg = document.createElement('div');
-        faucetMsg.style.cssText = 'margin-top:8px; font-size:0.7rem; color:var(--success);';
-        faucetMsg.textContent = `💧 Faucet deployed at: ${token.faucet.address}`;
+        faucetMsg.style.cssText = 'margin-top:8px;font-size:.7rem;color:var(--muted)';
+        faucetMsg.textContent = '💧 Faucet deployment will follow after token confirmation.';
         statusEl.appendChild(faucetMsg);
-
-        // Shareable link
-        const shareWrap = document.createElement('div');
-        shareWrap.className = 'copy-wrap';
-        const shareUrl = `${location.origin}${location.pathname}?faucet=${token.faucet.address}`;
-        shareWrap.innerHTML = `
-          <input type="text" value="${shareUrl}" readonly />
-          <button class="btn-copy" onclick="copyFaucetLink(this, '${shareUrl}')">Copy Link</button>
-        `;
-        statusEl.appendChild(shareWrap);
       }
 
       // Reset form
-      ['tokenName','tokenSymbol','tokenSupply','tokenDesc','faucetAmount','faucetCooldown','faucetReserve','faucetMaxClaims']
+      ['tokenName','tokenSymbol','tokenSupply','tokenDesc',
+       'faucetAmount','faucetCooldown','faucetReserve','faucetMaxClaims']
         .forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
       document.getElementById('tokenDecimals').value = '8';
       document.getElementById('faucetToggle').checked = false;
       document.getElementById('faucetFields').classList.remove('show');
 
     } catch (err) {
-      showStatus('deployStatus', 'error', 'Deployment Failed', err.message || 'Unknown error. Check console.');
+      showStatus('deployStatus', 'error', 'Deployment Failed',
+        err.message || 'Unknown error — check console and try again.');
     } finally {
       btn.disabled = false;
       btn.innerHTML = '<span class="sparks"></span>⚒ &nbsp;Forge Token';
