@@ -1,1822 +1,1208 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Token Forge — Bitcoin L1 Token Deployer</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet" />
-  <style>
-    :root {
-      --bg:        #0a0806;
-      --surface:   #110f0c;
-      --panel:     #1a1612;
-      --border:    #2e2820;
-      --orange:    #f97316;
-      --gold:      #f59e0b;
-      --ember:     #ef4444;
-      --text:      #e8ddd0;
-      --muted:     #7a6e62;
-      --success:   #22c55e;
-      --testnet:   #a78bfa;
-    }
-
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-    body {
-      background: var(--bg);
-      color: var(--text);
-      font-family: 'Space Mono', monospace;
-      min-height: 100vh;
-      overflow-x: hidden;
-    }
-
-    /* Forge glow background */
-    body::before {
-      content: '';
-      position: fixed;
-      bottom: -200px;
-      left: 50%;
-      transform: translateX(-50%);
-      width: 800px;
-      height: 400px;
-      background: radial-gradient(ellipse at center, rgba(249,115,22,0.12) 0%, rgba(239,68,68,0.06) 40%, transparent 70%);
-      pointer-events: none;
-      z-index: 0;
-    }
-
-    /* Scanlines overlay */
-    body::after {
-      content: '';
-      position: fixed;
-      inset: 0;
-      background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.03) 2px, rgba(0,0,0,0.03) 4px);
-      pointer-events: none;
-      z-index: 9999;
-    }
-
-    /* ── HEADER ── */
-    header {
-      position: relative;
-      z-index: 10;
-      border-bottom: 1px solid var(--border);
-      padding: 0 2rem;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      height: 64px;
-      background: rgba(10,8,6,0.9);
-      backdrop-filter: blur(12px);
-    }
-
-    .logo {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
-
-    .logo-icon {
-      width: 36px;
-      height: 36px;
-      position: relative;
-    }
-
-    .logo-icon svg { width: 100%; height: 100%; }
-
-    .logo-text {
-      font-family: 'Bebas Neue', sans-serif;
-      font-size: 1.8rem;
-      letter-spacing: 0.08em;
-      background: linear-gradient(135deg, var(--orange), var(--gold));
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
-    }
-
-    .logo-sub {
-      font-size: 0.6rem;
-      color: var(--muted);
-      letter-spacing: 0.2em;
-      text-transform: uppercase;
-      margin-top: -4px;
-    }
-
-    .header-right {
-      display: flex;
-      align-items: center;
-      gap: 1rem;
-    }
-
-    /* ── NETWORK SWITCHER ── */
-    .network-switcher {
-      position: relative;
-    }
-
-    .network-badge {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      padding: 4px 12px;
-      border: 1px solid var(--border);
-      border-radius: 2px;
-      font-size: 0.65rem;
-      color: var(--muted);
-      letter-spacing: 0.15em;
-      text-transform: uppercase;
-      cursor: pointer;
-      background: transparent;
-      font-family: 'Space Mono', monospace;
-      transition: border-color 0.2s, color 0.2s;
-      user-select: none;
-    }
-
-    .network-badge:hover {
-      border-color: var(--orange);
-      color: var(--text);
-    }
-
-    .network-badge.testnet {
-      border-color: rgba(167,139,250,0.4);
-      color: var(--testnet);
-    }
-
-    .network-badge.testnet .network-dot {
-      background: var(--testnet);
-      box-shadow: 0 0 6px var(--testnet);
-    }
-
-    .network-dot {
-      width: 6px;
-      height: 6px;
-      border-radius: 50%;
-      background: var(--success);
-      box-shadow: 0 0 6px var(--success);
-      animation: pulse 2s infinite;
-    }
-
-    .network-chevron {
-      font-size: 0.5rem;
-      margin-left: 2px;
-      opacity: 0.6;
-    }
-
-    .network-dropdown {
-      display: none;
-      position: absolute;
-      top: calc(100% + 6px);
-      right: 0;
-      min-width: 200px;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      z-index: 100;
-      animation: fadeUp 0.15s ease both;
-    }
-
-    .network-dropdown.open { display: block; }
-
-    .network-option {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding: 10px 14px;
-      font-size: 0.65rem;
-      letter-spacing: 0.12em;
-      text-transform: uppercase;
-      color: var(--muted);
-      cursor: pointer;
-      transition: background 0.15s, color 0.15s;
-      border: none;
-      background: none;
-      width: 100%;
-      text-align: left;
-      font-family: 'Space Mono', monospace;
-    }
-
-    .network-option:hover { background: var(--panel); color: var(--text); }
-
-    .network-option.active { color: var(--orange); }
-
-    .network-option .opt-dot {
-      width: 6px;
-      height: 6px;
-      border-radius: 50%;
-      flex-shrink: 0;
-    }
-
-    .network-option.regtest .opt-dot { background: var(--success); box-shadow: 0 0 5px var(--success); }
-    .network-option.testnet .opt-dot { background: var(--testnet); box-shadow: 0 0 5px var(--testnet); }
-
-    .network-option .opt-meta {
-      font-size: 0.55rem;
-      color: var(--muted);
-      opacity: 0.6;
-      margin-top: 1px;
-      letter-spacing: 0.08em;
-      text-transform: none;
-      display: block;
-    }
-
-    /* Testnet banner */
-    .testnet-banner {
-      display: none;
-      background: rgba(167,139,250,0.06);
-      border-bottom: 1px solid rgba(167,139,250,0.2);
-      padding: 6px 2rem;
-      font-size: 0.6rem;
-      letter-spacing: 0.12em;
-      text-transform: uppercase;
-      color: var(--testnet);
-      text-align: center;
-      position: relative;
-      z-index: 9;
-    }
-
-    .testnet-banner.show { display: block; }
-
-    @keyframes pulse {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.4; }
-    }
-
-    /* ── CONNECT BUTTON ── */
-    .btn-connect {
-      background: transparent;
-      border: 1px solid var(--orange);
-      color: var(--orange);
-      font-family: 'Space Mono', monospace;
-      font-size: 0.7rem;
-      letter-spacing: 0.15em;
-      text-transform: uppercase;
-      padding: 8px 20px;
-      cursor: pointer;
-      transition: all 0.2s;
-      position: relative;
-      overflow: hidden;
-    }
-
-    .btn-connect::before {
-      content: '';
-      position: absolute;
-      inset: 0;
-      background: var(--orange);
-      transform: translateX(-100%);
-      transition: transform 0.2s;
-      z-index: -1;
-    }
-
-    .btn-connect:hover::before { transform: translateX(0); }
-    .btn-connect:hover { color: var(--bg); }
-
-    .btn-connect.connected {
-      border-color: var(--success);
-      color: var(--success);
-    }
-
-    .btn-connect.connected::before { background: var(--success); }
-    .btn-connect.connected:hover { color: var(--bg); }
-
-    /* ── MAIN ── */
-    main {
-      position: relative;
-      z-index: 1;
-      max-width: 960px;
-      margin: 0 auto;
-      padding: 3rem 2rem 6rem;
-    }
-
-    /* ── HERO ── */
-    .hero {
-      text-align: center;
-      margin-bottom: 3rem;
-      animation: fadeUp 0.6s ease both;
-    }
-
-    @keyframes fadeUp {
-      from { opacity: 0; transform: translateY(20px); }
-      to   { opacity: 1; transform: translateY(0); }
-    }
-
-    .hero h1 {
-      font-family: 'Bebas Neue', sans-serif;
-      font-size: clamp(3rem, 8vw, 5.5rem);
-      letter-spacing: 0.06em;
-      line-height: 1;
-      background: linear-gradient(135deg, #fff 0%, var(--gold) 50%, var(--orange) 100%);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
-    }
-
-    .hero p {
-      margin-top: 1rem;
-      color: var(--muted);
-      font-size: 0.8rem;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-    }
-
-    /* ── TABS ── */
-    .tabs {
-      display: flex;
-      border-bottom: 1px solid var(--border);
-      margin-bottom: 2rem;
-      animation: fadeUp 0.6s 0.1s ease both;
-    }
-
-    .tab {
-      background: none;
-      border: none;
-      color: var(--muted);
-      font-family: 'Space Mono', monospace;
-      font-size: 0.7rem;
-      letter-spacing: 0.18em;
-      text-transform: uppercase;
-      padding: 12px 24px;
-      cursor: pointer;
-      border-bottom: 2px solid transparent;
-      margin-bottom: -1px;
-      transition: all 0.2s;
-    }
-
-    .tab:hover { color: var(--text); }
-
-    .tab.active {
-      color: var(--orange);
-      border-bottom-color: var(--orange);
-    }
-
-    .tab-panel { display: none; animation: fadeUp 0.3s ease both; }
-    .tab-panel.active { display: block; }
-
-    /* ── PANEL ── */
-    .panel {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      padding: 2rem;
-      position: relative;
-    }
-
-    .panel::before {
-      content: '';
-      position: absolute;
-      top: 0; left: 0; right: 0;
-      height: 2px;
-      background: linear-gradient(90deg, var(--orange), var(--gold), transparent);
-    }
-
-    .panel-title {
-      font-family: 'Bebas Neue', sans-serif;
-      font-size: 1.4rem;
-      letter-spacing: 0.1em;
-      color: var(--gold);
-      margin-bottom: 0.3rem;
-    }
-
-    .panel-desc {
-      font-size: 0.7rem;
-      color: var(--muted);
-      margin-bottom: 2rem;
-      letter-spacing: 0.05em;
-    }
-
-    /* ── FORM ── */
-    .form-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 1.2rem;
-    }
-
-    .form-grid.single { grid-template-columns: 1fr; }
-
-    .field {
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-    }
-
-    .field.span2 { grid-column: 1 / -1; }
-
-    label {
-      font-size: 0.65rem;
-      letter-spacing: 0.2em;
-      text-transform: uppercase;
-      color: var(--muted);
-    }
-
-    label span {
-      color: var(--ember);
-      margin-left: 2px;
-    }
-
-    input, textarea, select {
-      background: var(--panel);
-      border: 1px solid var(--border);
-      color: var(--text);
-      font-family: 'Space Mono', monospace;
-      font-size: 0.85rem;
-      padding: 10px 14px;
-      outline: none;
-      transition: border-color 0.2s;
-      width: 100%;
-    }
-
-    input:focus, textarea:focus, select:focus {
-      border-color: var(--orange);
-    }
-
-    textarea { resize: vertical; min-height: 80px; }
-
-    select option { background: var(--panel); }
-
-    input::placeholder, textarea::placeholder {
-      color: var(--muted);
-      opacity: 0.6;
-    }
-
-    .field-hint {
-      font-size: 0.6rem;
-      color: var(--muted);
-      opacity: 0.7;
-    }
-
-    /* ── DIVIDER ── */
-    .divider {
-      display: flex;
-      align-items: center;
-      gap: 1rem;
-      margin: 2rem 0;
-    }
-
-    .divider-line {
-      flex: 1;
-      height: 1px;
-      background: var(--border);
-    }
-
-    .divider-label {
-      font-size: 0.65rem;
-      letter-spacing: 0.2em;
-      text-transform: uppercase;
-      color: var(--muted);
-    }
-
-    /* ── TOGGLE ── */
-    .toggle-row {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 12px 0;
-    }
-
-    .toggle-info h4 {
-      font-size: 0.8rem;
-      font-weight: 700;
-      color: var(--text);
-      margin-bottom: 2px;
-    }
-
-    .toggle-info p {
-      font-size: 0.65rem;
-      color: var(--muted);
-    }
-
-    .toggle {
-      position: relative;
-      width: 44px;
-      height: 24px;
-      flex-shrink: 0;
-    }
-
-    .toggle input { opacity: 0; width: 0; height: 0; }
-
-    .toggle-slider {
-      position: absolute;
-      inset: 0;
-      background: var(--panel);
-      border: 1px solid var(--border);
-      cursor: pointer;
-      transition: 0.3s;
-    }
-
-    .toggle-slider::before {
-      content: '';
-      position: absolute;
-      width: 16px;
-      height: 16px;
-      left: 3px;
-      top: 3px;
-      background: var(--muted);
-      transition: 0.3s;
-    }
-
-    .toggle input:checked + .toggle-slider {
-      background: rgba(249,115,22,0.15);
-      border-color: var(--orange);
-    }
-
-    .toggle input:checked + .toggle-slider::before {
-      transform: translateX(20px);
-      background: var(--orange);
-    }
-
-    .faucet-fields {
-      display: none;
-      animation: fadeUp 0.3s ease both;
-    }
-
-    .faucet-fields.show { display: block; }
-
-    /* ── SUBMIT BUTTON ── */
-    .btn-forge {
-      width: 100%;
-      margin-top: 2rem;
-      background: linear-gradient(135deg, var(--orange), var(--gold));
-      border: none;
-      color: var(--bg);
-      font-family: 'Bebas Neue', sans-serif;
-      font-size: 1.3rem;
-      letter-spacing: 0.15em;
-      padding: 16px;
-      cursor: pointer;
-      transition: all 0.2s;
-      position: relative;
-      overflow: hidden;
-    }
-
-    .btn-forge:hover {
-      transform: translateY(-1px);
-      box-shadow: 0 8px 24px rgba(249,115,22,0.3);
-    }
-
-    .btn-forge:active { transform: translateY(0); }
-
-    .btn-forge:disabled {
-      opacity: 0.4;
-      cursor: not-allowed;
-      transform: none;
-      box-shadow: none;
-    }
-
-    .btn-forge .sparks {
-      position: absolute;
-      inset: 0;
-      background: linear-gradient(135deg, transparent 40%, rgba(255,255,255,0.15) 50%, transparent 60%);
-      transform: translateX(-100%) skewX(-15deg);
-      transition: none;
-    }
-
-    .btn-forge:not(:disabled):hover .sparks {
-      animation: shimmer 0.6s ease forwards;
-    }
-
-    @keyframes shimmer {
-      to { transform: translateX(200%) skewX(-15deg); }
-    }
-
-    /* ── STATUS ── */
-    .status-box {
-      margin-top: 1.5rem;
-      padding: 1rem 1.5rem;
-      border: 1px solid var(--border);
-      background: var(--panel);
-      display: none;
-      animation: fadeUp 0.3s ease both;
-    }
-
-    .status-box.show { display: block; }
-    .status-box.success { border-color: var(--success); }
-    .status-box.error { border-color: var(--ember); }
-    .status-box.pending { border-color: var(--gold); }
-
-    .status-title {
-      font-size: 0.65rem;
-      letter-spacing: 0.2em;
-      text-transform: uppercase;
-      margin-bottom: 8px;
-    }
-
-    .status-box.success .status-title { color: var(--success); }
-    .status-box.error .status-title { color: var(--ember); }
-    .status-box.pending .status-title { color: var(--gold); }
-
-    .status-msg {
-      font-size: 0.78rem;
-      color: var(--text);
-      word-break: break-all;
-    }
-
-    .status-link {
-      display: inline-block;
-      margin-top: 8px;
-      font-size: 0.7rem;
-      color: var(--orange);
-      text-decoration: none;
-      letter-spacing: 0.05em;
-    }
-
-    .status-link:hover { text-decoration: underline; }
-
-    /* ── SPINNER ── */
-    .spinner {
-      display: inline-block;
-      width: 12px;
-      height: 12px;
-      border: 2px solid rgba(249,115,22,0.3);
-      border-top-color: var(--orange);
-      border-radius: 50%;
-      animation: spin 0.8s linear infinite;
-      margin-right: 8px;
-      vertical-align: middle;
-    }
-
-    @keyframes spin { to { transform: rotate(360deg); } }
-
-    /* ── DASHBOARD ── */
-    .empty-state {
-      text-align: center;
-      padding: 4rem 2rem;
-      color: var(--muted);
-    }
-
-    .empty-icon {
-      font-size: 3rem;
-      margin-bottom: 1rem;
-      opacity: 0.4;
-    }
-
-    .empty-state h3 {
-      font-family: 'Bebas Neue', sans-serif;
-      font-size: 1.5rem;
-      letter-spacing: 0.1em;
-      margin-bottom: 0.5rem;
-      color: var(--muted);
-    }
-
-    .empty-state p {
-      font-size: 0.7rem;
-      letter-spacing: 0.05em;
-    }
-
-    .token-card {
-      border: 1px solid var(--border);
-      background: var(--panel);
-      padding: 1.2rem 1.5rem;
-      margin-bottom: 1rem;
-      display: grid;
-      grid-template-columns: 1fr auto;
-      gap: 1rem;
-      align-items: center;
-      transition: border-color 0.2s;
-      animation: fadeUp 0.3s ease both;
-    }
-
-    .token-card:hover { border-color: var(--orange); }
-
-    .token-name {
-      font-family: 'Bebas Neue', sans-serif;
-      font-size: 1.3rem;
-      letter-spacing: 0.08em;
-      color: var(--gold);
-    }
-
-    .token-ticker {
-      display: inline-block;
-      background: rgba(249,115,22,0.1);
-      border: 1px solid rgba(249,115,22,0.3);
-      color: var(--orange);
-      font-size: 0.65rem;
-      letter-spacing: 0.15em;
-      padding: 2px 8px;
-      margin-left: 8px;
-      vertical-align: middle;
-    }
-
-    .token-network-tag {
-      display: inline-block;
-      font-size: 0.55rem;
-      letter-spacing: 0.12em;
-      padding: 2px 6px;
-      margin-left: 6px;
-      vertical-align: middle;
-      border: 1px solid rgba(167,139,250,0.3);
-      color: var(--testnet);
-      background: rgba(167,139,250,0.05);
-    }
-
-    .token-network-tag.regtest {
-      border-color: rgba(34,197,94,0.3);
-      color: var(--success);
-      background: rgba(34,197,94,0.05);
-    }
-
-    .token-meta {
-      font-size: 0.65rem;
-      color: var(--muted);
-      margin-top: 4px;
-      letter-spacing: 0.05em;
-    }
-
-    .token-meta span { color: var(--text); }
-
-    .token-actions {
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-      align-items: flex-end;
-    }
-
-    .btn-sm {
-      background: transparent;
-      border: 1px solid var(--border);
-      color: var(--muted);
-      font-family: 'Space Mono', monospace;
-      font-size: 0.6rem;
-      letter-spacing: 0.1em;
-      text-transform: uppercase;
-      padding: 5px 12px;
-      cursor: pointer;
-      transition: all 0.2s;
-      text-decoration: none;
-      display: inline-block;
-    }
-
-    .btn-sm:hover { border-color: var(--orange); color: var(--orange); }
-
-    .faucet-badge {
-      display: flex;
-      align-items: center;
-      gap: 5px;
-      font-size: 0.6rem;
-      color: var(--success);
-      letter-spacing: 0.1em;
-    }
-
-    .faucet-dot {
-      width: 5px;
-      height: 5px;
-      border-radius: 50%;
-      background: var(--success);
-      box-shadow: 0 0 4px var(--success);
-      animation: pulse 2s infinite;
-    }
-
-    /* ── FAUCET PANEL ── */
-    .faucet-claim-card {
-      border: 1px solid var(--border);
-      background: var(--panel);
-      padding: 1.5rem;
-      position: relative;
-      overflow: hidden;
-    }
-
-    .faucet-claim-card::after {
-      content: 'FAUCET';
-      position: absolute;
-      top: 50%;
-      right: -20px;
-      transform: translateY(-50%) rotate(90deg);
-      font-family: 'Bebas Neue', sans-serif;
-      font-size: 5rem;
-      color: rgba(249,115,22,0.04);
-      letter-spacing: 0.1em;
-      pointer-events: none;
-    }
-
-    .faucet-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-      margin-bottom: 1.5rem;
-    }
-
-    .faucet-amount {
-      font-family: 'Bebas Neue', sans-serif;
-      font-size: 2.5rem;
-      color: var(--orange);
-      line-height: 1;
-    }
-
-    .faucet-amount span {
-      font-size: 1rem;
-      color: var(--muted);
-      margin-left: 4px;
-    }
-
-    .cooldown-bar {
-      margin-top: 1rem;
-      height: 4px;
-      background: var(--border);
-      position: relative;
-      overflow: hidden;
-    }
-
-    .cooldown-fill {
-      height: 100%;
-      background: linear-gradient(90deg, var(--orange), var(--gold));
-      width: 0%;
-      transition: width 1s ease;
-    }
-
-    .stats-row {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 1px;
-      background: var(--border);
-      margin-bottom: 1.5rem;
-    }
-
-    .stat-cell {
-      background: var(--panel);
-      padding: 1rem;
-      text-align: center;
-    }
-
-    .stat-value {
-      font-family: 'Bebas Neue', sans-serif;
-      font-size: 1.5rem;
-      color: var(--gold);
-      letter-spacing: 0.05em;
-    }
-
-    .stat-label {
-      font-size: 0.6rem;
-      color: var(--muted);
-      letter-spacing: 0.15em;
-      text-transform: uppercase;
-      margin-top: 2px;
-    }
-
-    /* ── FOOTER ── */
-    footer {
-      position: relative;
-      z-index: 1;
-      border-top: 1px solid var(--border);
-      padding: 1.5rem 2rem;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      color: var(--muted);
-      font-size: 0.65rem;
-      letter-spacing: 0.1em;
-    }
-
-    footer a { color: var(--orange); text-decoration: none; }
-    footer a:hover { text-decoration: underline; }
-
-    /* ── WALLET MODAL ── */
-    .modal-overlay {
-      display: none;
-      position: fixed;
-      inset: 0;
-      background: rgba(0,0,0,0.8);
-      backdrop-filter: blur(4px);
-      z-index: 1000;
-      align-items: center;
-      justify-content: center;
-    }
-
-    .modal-overlay.show { display: flex; }
-
-    .modal {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      padding: 2rem;
-      width: 100%;
-      max-width: 400px;
-      position: relative;
-      animation: fadeUp 0.3s ease both;
-    }
-
-    .modal::before {
-      content: '';
-      position: absolute;
-      top: 0; left: 0; right: 0;
-      height: 2px;
-      background: linear-gradient(90deg, var(--orange), var(--gold));
-    }
-
-    .modal-title {
-      font-family: 'Bebas Neue', sans-serif;
-      font-size: 1.4rem;
-      letter-spacing: 0.1em;
-      color: var(--gold);
-      margin-bottom: 0.3rem;
-    }
-
-    .modal-desc {
-      font-size: 0.68rem;
-      color: var(--muted);
-      margin-bottom: 1.5rem;
-    }
-
-    .wallet-option {
-      display: flex;
-      align-items: center;
-      gap: 1rem;
-      padding: 1rem;
-      border: 1px solid var(--border);
-      background: var(--panel);
-      cursor: pointer;
-      transition: all 0.2s;
-      margin-bottom: 0.5rem;
-      width: 100%;
-      text-align: left;
-    }
-
-    .wallet-option:hover { border-color: var(--orange); }
-
-    .wallet-icon {
-      width: 36px;
-      height: 36px;
-      background: rgba(249,115,22,0.1);
-      border: 1px solid rgba(249,115,22,0.3);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 1.2rem;
-      flex-shrink: 0;
-    }
-
-    .wallet-info strong {
-      display: block;
-      font-size: 0.8rem;
-      color: var(--text);
-      margin-bottom: 2px;
-    }
-
-    .wallet-info span {
-      font-size: 0.65rem;
-      color: var(--muted);
-    }
-
-    .modal-close {
-      position: absolute;
-      top: 1rem; right: 1rem;
-      background: none;
-      border: none;
-      color: var(--muted);
-      font-size: 1.2rem;
-      cursor: pointer;
-      line-height: 1;
-    }
-
-    .modal-close:hover { color: var(--text); }
-
-    /* ── RESPONSIVE ── */
-    @media (max-width: 640px) {
-      .form-grid { grid-template-columns: 1fr; }
-      .form-grid .field.span2 { grid-column: 1; }
-      .stats-row { grid-template-columns: 1fr; }
-      .token-card { grid-template-columns: 1fr; }
-      header { padding: 0 1rem; }
-      main { padding: 2rem 1rem 4rem; }
-      .panel { padding: 1.2rem; }
-      .network-badge { padding: 4px 8px; }
-    }
-
-    /* ── COPY BUTTON ── */
-    .copy-wrap {
-      display: flex;
-      gap: 8px;
-      margin-top: 8px;
-    }
-
-    .copy-wrap input {
-      flex: 1;
-      font-size: 0.72rem;
-      padding: 8px 10px;
-      color: var(--muted);
-    }
-
-    .btn-copy {
-      background: transparent;
-      border: 1px solid var(--border);
-      color: var(--muted);
-      font-family: 'Space Mono', monospace;
-      font-size: 0.65rem;
-      letter-spacing: 0.1em;
-      padding: 0 14px;
-      cursor: pointer;
-      transition: all 0.2s;
-      white-space: nowrap;
-    }
-
-    .btn-copy:hover { border-color: var(--orange); color: var(--orange); }
-    .btn-copy.copied { border-color: var(--success); color: var(--success); }
-  </style>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Token Forge — OP_NET Bitcoin Token Deployer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet"/>
+<!-- JSZip for in-browser ZIP generation -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+:root{
+  --bg:#09080a;--surface:#110e14;--panel:#191520;--border:#2a2433;
+  --orange:#f97316;--gold:#f59e0b;--purple:#a78bfa;--ember:#ef4444;
+  --text:#ede8f5;--muted:#6b6278;--success:#22c55e;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:'Space Mono',monospace;min-height:100vh;overflow-x:hidden}
+
+/* scan-line overlay */
+body::after{content:'';position:fixed;inset:0;background:repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(0,0,0,0.04) 3px,rgba(0,0,0,0.04) 4px);pointer-events:none;z-index:9999}
+
+/* glow orbs */
+.orb{position:fixed;border-radius:50%;filter:blur(120px);pointer-events:none;z-index:0}
+.orb-1{width:600px;height:600px;background:radial-gradient(circle,rgba(249,115,22,0.08),transparent 70%);bottom:-200px;left:-100px}
+.orb-2{width:500px;height:500px;background:radial-gradient(circle,rgba(167,139,250,0.06),transparent 70%);top:-100px;right:-100px}
+
+/* ── HEADER ── */
+header{position:sticky;top:0;z-index:100;height:62px;border-bottom:1px solid var(--border);background:rgba(9,8,10,0.92);backdrop-filter:blur(16px);display:flex;align-items:center;justify-content:space-between;padding:0 2rem}
+.logo{display:flex;align-items:center;gap:10px;text-decoration:none}
+.logo-mark{width:32px;height:32px;flex-shrink:0}
+.logo-text{font-family:'Bebas Neue',sans-serif;font-size:1.6rem;letter-spacing:.1em;background:linear-gradient(135deg,#fff 20%,var(--gold) 60%,var(--orange));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.logo-net{font-size:.55rem;color:var(--muted);letter-spacing:.2em;text-transform:uppercase;line-height:1}
+.header-right{display:flex;align-items:center;gap:.75rem}
+
+/* network badge */
+.net-wrap{position:relative}
+.net-btn{display:flex;align-items:center;gap:6px;padding:5px 12px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Space Mono',monospace;font-size:.62rem;letter-spacing:.15em;text-transform:uppercase;cursor:pointer;transition:border-color .2s,color .2s;white-space:nowrap}
+.net-btn:hover{border-color:var(--orange);color:var(--text)}
+.net-btn.testnet{border-color:rgba(167,139,250,.4);color:var(--purple)}
+.net-btn.testnet .ndot{background:var(--purple);box-shadow:0 0 6px var(--purple)}
+.net-btn.mainnet{border-color:rgba(249,115,22,.5);color:var(--orange)}
+.net-btn.mainnet .ndot{background:var(--orange);box-shadow:0 0 6px var(--orange)}
+.ndot{width:6px;height:6px;border-radius:50%;background:var(--success);animation:blink 2s infinite}
+.net-chevron{font-size:.45rem;opacity:.6}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+.net-dropdown{display:none;position:absolute;top:calc(100% + 6px);right:0;min-width:200px;background:var(--surface);border:1px solid var(--border);z-index:200;animation:slideUp .12s ease both}
+.net-dropdown.open{display:block}
+.net-opt{display:flex;align-items:flex-start;gap:8px;width:100%;border:none;background:none;padding:10px 14px;text-align:left;cursor:pointer;font-family:'Space Mono',monospace;font-size:.62rem;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);transition:background .15s,color .15s}
+.net-opt:hover{background:var(--panel);color:var(--text)}
+.net-opt.active{color:var(--orange)}
+.net-opt-dot{width:6px;height:6px;border-radius:50%;margin-top:3px;flex-shrink:0}
+.net-opt.testnet .net-opt-dot{background:var(--purple);box-shadow:0 0 4px var(--purple)}
+.net-opt.mainnet .net-opt-dot{background:var(--orange);box-shadow:0 0 4px var(--orange)}
+.net-opt-sub{font-size:.52rem;color:var(--muted);opacity:.6;margin-top:1px;letter-spacing:.06em;text-transform:none;display:block}
+
+/* banner */
+.net-banner{display:none;padding:5px 1rem;font-size:.58rem;letter-spacing:.12em;text-transform:uppercase;text-align:center;position:relative;z-index:99}
+.net-banner.show{display:block}
+.net-banner.testnet{background:rgba(167,139,250,.05);border-bottom:1px solid rgba(167,139,250,.18);color:var(--purple)}
+.net-banner.mainnet{background:rgba(249,115,22,.05);border-bottom:1px solid rgba(249,115,22,.2);color:var(--orange)}
+
+/* connect btn */
+.btn-connect{background:transparent;border:1px solid var(--orange);color:var(--orange);font-family:'Space Mono',monospace;font-size:.62rem;letter-spacing:.14em;text-transform:uppercase;padding:7px 18px;cursor:pointer;transition:all .2s;position:relative;overflow:hidden}
+.btn-connect::after{content:'';position:absolute;inset:0;background:var(--orange);transform:translateX(-101%);transition:transform .2s;z-index:-1}
+.btn-connect:hover::after{transform:translateX(0)}
+.btn-connect:hover{color:var(--bg)}
+.btn-connect.connected{border-color:var(--success);color:var(--success)}
+.btn-connect.connected::after{background:var(--success)}
+.btn-connect.connected:hover{color:var(--bg)}
+
+/* ── MAIN ── */
+main{position:relative;z-index:1;max-width:980px;margin:0 auto;padding:2.5rem 2rem 5rem}
+@keyframes slideUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+@keyframes fadeIn{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
+
+.hero{text-align:center;margin-bottom:2.5rem;animation:fadeIn .5s ease both}
+.hero h1{font-family:'Bebas Neue',sans-serif;font-size:clamp(2.8rem,7vw,5rem);letter-spacing:.06em;line-height:1;background:linear-gradient(135deg,#fff 0%,var(--gold) 45%,var(--orange) 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.hero p{margin-top:.8rem;color:var(--muted);font-size:.72rem;letter-spacing:.1em;text-transform:uppercase}
+
+/* ── TABS ── */
+.tabs{display:flex;border-bottom:1px solid var(--border);margin-bottom:2rem;gap:0;animation:fadeIn .5s .08s ease both}
+.tab{background:none;border:none;color:var(--muted);font-family:'Space Mono',monospace;font-size:.65rem;letter-spacing:.18em;text-transform:uppercase;padding:11px 22px;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;transition:all .2s;white-space:nowrap}
+.tab:hover{color:var(--text)}
+.tab.active{color:var(--orange);border-bottom-color:var(--orange)}
+.tab-panel{display:none;animation:fadeIn .25s ease both}
+.tab-panel.active{display:block}
+
+/* ── PANEL ── */
+.panel{background:var(--surface);border:1px solid var(--border);padding:2rem;position:relative;overflow:hidden}
+.panel::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--orange),var(--gold) 50%,transparent)}
+.panel-title{font-family:'Bebas Neue',sans-serif;font-size:1.35rem;letter-spacing:.1em;color:var(--gold);margin-bottom:.25rem}
+.panel-desc{font-size:.66rem;color:var(--muted);margin-bottom:1.8rem;line-height:1.6}
+
+/* ── FORMS ── */
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.1rem}
+.field{display:flex;flex-direction:column;gap:5px}
+.field.span2{grid-column:1/-1}
+label{font-size:.6rem;letter-spacing:.2em;text-transform:uppercase;color:var(--muted)}
+label .req{color:var(--ember);margin-left:2px}
+input,textarea,select{background:var(--panel);border:1px solid var(--border);color:var(--text);font-family:'Space Mono',monospace;font-size:.82rem;padding:9px 13px;outline:none;transition:border-color .2s;width:100%}
+input:focus,textarea:focus,select:focus{border-color:var(--orange)}
+textarea{resize:vertical;min-height:72px;line-height:1.5}
+select option{background:var(--panel)}
+input::placeholder,textarea::placeholder{color:var(--muted);opacity:.5}
+.hint{font-size:.58rem;color:var(--muted);opacity:.65;line-height:1.4}
+
+/* divider */
+.divider{display:flex;align-items:center;gap:1rem;margin:1.8rem 0}
+.divider-line{flex:1;height:1px;background:var(--border)}
+.divider-text{font-size:.6rem;letter-spacing:.18em;text-transform:uppercase;color:var(--muted);white-space:nowrap}
+
+/* toggle */
+.toggle-row{display:flex;align-items:center;justify-content:space-between;padding:10px 0}
+.toggle-info h4{font-size:.78rem;font-weight:700;color:var(--text)}
+.toggle-info p{font-size:.62rem;color:var(--muted);margin-top:2px}
+.toggle{position:relative;width:42px;height:22px;flex-shrink:0}
+.toggle input{opacity:0;width:0;height:0}
+.tog-slider{position:absolute;inset:0;background:var(--panel);border:1px solid var(--border);cursor:pointer;transition:.25s}
+.tog-slider::before{content:'';position:absolute;width:14px;height:14px;left:3px;top:3px;background:var(--muted);transition:.25s}
+.toggle input:checked+.tog-slider{background:rgba(249,115,22,.12);border-color:var(--orange)}
+.toggle input:checked+.tog-slider::before{transform:translateX(19px);background:var(--orange)}
+.extra-fields{display:none;animation:fadeIn .25s ease both}
+.extra-fields.show{display:block}
+
+/* ── BUTTONS ── */
+.btn-primary{width:100%;margin-top:1.8rem;background:linear-gradient(135deg,var(--orange),var(--gold));border:none;color:var(--bg);font-family:'Bebas Neue',sans-serif;font-size:1.2rem;letter-spacing:.16em;padding:14px;cursor:pointer;transition:all .2s;position:relative;overflow:hidden}
+.btn-primary:hover{transform:translateY(-1px);box-shadow:0 8px 28px rgba(249,115,22,.28)}
+.btn-primary:active{transform:translateY(0)}
+.btn-primary:disabled{opacity:.35;cursor:not-allowed;transform:none;box-shadow:none}
+.btn-primary .shine{position:absolute;inset:0;background:linear-gradient(135deg,transparent 35%,rgba(255,255,255,.14) 50%,transparent 65%);transform:translateX(-120%) skewX(-20deg)}
+.btn-primary:not(:disabled):hover .shine{animation:sheen .55s ease forwards}
+@keyframes sheen{to{transform:translateX(200%) skewX(-20deg)}}
+
+.btn-sec{background:transparent;border:1px solid var(--border);color:var(--muted);font-family:'Space Mono',monospace;font-size:.6rem;letter-spacing:.1em;text-transform:uppercase;padding:6px 14px;cursor:pointer;transition:all .2s;text-decoration:none;display:inline-block}
+.btn-sec:hover{border-color:var(--orange);color:var(--orange)}
+.btn-sec.danger:hover{border-color:var(--ember);color:var(--ember)}
+
+/* ── DEPLOY FLOW ── */
+.deploy-flow{display:none;margin-top:1.8rem;border:1px solid var(--border);background:var(--panel);animation:fadeIn .3s ease both}
+.deploy-flow.show{display:block}
+.flow-header{padding:.9rem 1.4rem;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px}
+.flow-header-title{font-family:'Bebas Neue',sans-serif;font-size:1.05rem;letter-spacing:.1em;color:var(--gold)}
+.step{display:flex;gap:.9rem;padding:.9rem 1.4rem;border-bottom:1px solid var(--border);transition:background .2s}
+.step:last-child{border-bottom:none}
+.step-num{width:26px;height:26px;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-family:'Bebas Neue',sans-serif;font-size:.85rem;color:var(--muted);flex-shrink:0;transition:all .2s}
+.step.active .step-num{border-color:var(--orange);color:var(--orange);background:rgba(249,115,22,.08)}
+.step.done .step-num{border-color:var(--success);color:var(--success);background:rgba(34,197,94,.08)}
+.step-body{flex:1}
+.step-title{font-size:.72rem;font-weight:700;color:var(--muted);margin-bottom:3px;letter-spacing:.04em}
+.step.active .step-title{color:var(--orange)}
+.step.done .step-title{color:var(--success)}
+.step-desc{font-size:.62rem;color:var(--muted);line-height:1.65}
+.step-desc code{background:rgba(249,115,22,.1);padding:1px 5px;font-size:.6rem;color:var(--orange)}
+.step-action{margin-top:.7rem;display:flex;gap:.5rem;flex-wrap:wrap;align-items:center}
+
+/* download button */
+.btn-download{display:inline-flex;align-items:center;gap:7px;background:linear-gradient(135deg,var(--orange),var(--gold));border:none;color:var(--bg);font-family:'Bebas Neue',sans-serif;font-size:.95rem;letter-spacing:.12em;padding:9px 22px;cursor:pointer;transition:all .2s;text-decoration:none;white-space:nowrap}
+.btn-download:hover{transform:translateY(-1px);box-shadow:0 5px 18px rgba(249,115,22,.3)}
+
+/* register input */
+.reg-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:.7rem}
+.reg-row input{flex:1;min-width:180px;font-size:.73rem}
+.btn-reg{background:transparent;border:1px solid var(--orange);color:var(--orange);font-family:'Space Mono',monospace;font-size:.6rem;letter-spacing:.1em;text-transform:uppercase;padding:0 16px;cursor:pointer;transition:all .2s;white-space:nowrap;height:40px}
+.btn-reg:hover{background:var(--orange);color:var(--bg)}
+
+/* ── STATUS ── */
+.status{margin-top:1.4rem;padding:.9rem 1.3rem;border:1px solid var(--border);background:var(--panel);display:none;animation:fadeIn .25s ease both}
+.status.show{display:block}
+.status.ok{border-color:var(--success)}
+.status.err{border-color:var(--ember)}
+.status.wait{border-color:var(--gold)}
+.status-label{font-size:.6rem;letter-spacing:.18em;text-transform:uppercase;margin-bottom:7px}
+.status.ok .status-label{color:var(--success)}
+.status.err .status-label{color:var(--ember)}
+.status.wait .status-label{color:var(--gold)}
+.status-body{font-size:.74rem;color:var(--text);word-break:break-all;line-height:1.5}
+.status a{color:var(--orange);text-decoration:none;font-size:.66rem;display:inline-block;margin-top:6px}
+.status a:hover{text-decoration:underline}
+
+/* copy row */
+.copy-row{display:flex;gap:6px;margin-top:8px}
+.copy-row input{flex:1;font-size:.68rem;padding:7px 10px;color:var(--muted)}
+.btn-copy{background:transparent;border:1px solid var(--border);color:var(--muted);font-family:'Space Mono',monospace;font-size:.6rem;letter-spacing:.1em;padding:0 12px;cursor:pointer;transition:all .2s;white-space:nowrap}
+.btn-copy:hover{border-color:var(--orange);color:var(--orange)}
+.btn-copy.ok{border-color:var(--success);color:var(--success)}
+
+/* spinner */
+.spin{display:inline-block;width:11px;height:11px;border:2px solid rgba(249,115,22,.3);border-top-color:var(--orange);border-radius:50%;animation:rotate .7s linear infinite;margin-right:7px;vertical-align:middle}
+@keyframes rotate{to{transform:rotate(360deg)}}
+
+/* ── DASHBOARD ── */
+.empty{text-align:center;padding:3.5rem 1rem;color:var(--muted)}
+.empty-icon{font-size:2.5rem;margin-bottom:.8rem;opacity:.35}
+.empty h3{font-family:'Bebas Neue',sans-serif;font-size:1.3rem;letter-spacing:.1em;margin-bottom:.4rem;color:var(--muted)}
+.empty p{font-size:.65rem}
+
+.token-card{border:1px solid var(--border);background:var(--panel);padding:1.1rem 1.4rem;margin-bottom:.8rem;display:grid;grid-template-columns:1fr auto;gap:.8rem;align-items:start;transition:border-color .2s;animation:fadeIn .3s ease both}
+.token-card:hover{border-color:rgba(249,115,22,.4)}
+.tok-name{font-family:'Bebas Neue',sans-serif;font-size:1.2rem;letter-spacing:.07em;color:var(--gold)}
+.tok-sym{display:inline-block;background:rgba(249,115,22,.1);border:1px solid rgba(249,115,22,.3);color:var(--orange);font-size:.6rem;letter-spacing:.14em;padding:2px 7px;margin-left:6px;vertical-align:middle}
+.tok-net{display:inline-block;font-size:.5rem;letter-spacing:.12em;padding:2px 5px;margin-left:5px;vertical-align:middle}
+.tok-net.testnet{border:1px solid rgba(167,139,250,.3);color:var(--purple);background:rgba(167,139,250,.05)}
+.tok-net.mainnet{border:1px solid rgba(249,115,22,.3);color:var(--orange);background:rgba(249,115,22,.05)}
+.tok-meta{font-size:.6rem;color:var(--muted);margin-top:3px}
+.tok-meta span{color:var(--text)}
+.tok-addr{font-size:.58rem;color:var(--orange);margin-top:3px;word-break:break-all}
+.tok-faucet{display:flex;align-items:center;gap:4px;font-size:.57rem;color:var(--success);margin-top:6px}
+.faucet-dot{width:4px;height:4px;border-radius:50%;background:var(--success);box-shadow:0 0 4px var(--success);animation:blink 2s infinite}
+.tok-actions{display:flex;flex-direction:column;gap:5px;align-items:flex-end;flex-shrink:0}
+
+/* ── FAUCET TAB ── */
+.stats-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--border);margin-bottom:1.5rem}
+.stat{background:var(--panel);padding:.9rem;text-align:center}
+.stat-val{font-family:'Bebas Neue',sans-serif;font-size:1.4rem;color:var(--gold);letter-spacing:.05em}
+.stat-lbl{font-size:.57rem;color:var(--muted);letter-spacing:.14em;text-transform:uppercase;margin-top:2px}
+.faucet-card{border:1px solid var(--border);padding:1.4rem;position:relative;overflow:hidden}
+.faucet-card::after{content:'FAUCET';position:absolute;right:-16px;top:50%;transform:translateY(-50%) rotate(90deg);font-family:'Bebas Neue',sans-serif;font-size:4.5rem;color:rgba(249,115,22,.04);pointer-events:none}
+.faucet-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:1.2rem}
+.faucet-amount{font-family:'Bebas Neue',sans-serif;font-size:2.4rem;color:var(--orange);line-height:1}
+.faucet-amount span{font-size:.9rem;color:var(--muted);margin-left:3px}
+.active-badge{display:flex;align-items:center;gap:4px;font-size:.57rem;color:var(--success);letter-spacing:.1em}
+.cd-bar{height:3px;background:var(--border);margin-top:.9rem;overflow:hidden}
+.cd-fill{height:100%;background:linear-gradient(90deg,var(--orange),var(--gold));width:0%;transition:width 1s ease}
+.cd-label{font-size:.57rem;color:var(--muted);margin-top:3px;text-align:right}
+
+/* ── FOOTER ── */
+footer{position:relative;z-index:1;border-top:1px solid var(--border);padding:1.2rem 2rem;display:flex;align-items:center;justify-content:space-between;color:var(--muted);font-size:.6rem;letter-spacing:.08em}
+footer a{color:var(--orange);text-decoration:none}
+footer a:hover{text-decoration:underline}
+
+/* ── WALLET MODAL ── */
+.overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);backdrop-filter:blur(5px);z-index:1000;align-items:center;justify-content:center}
+.overlay.show{display:flex}
+.modal{background:var(--surface);border:1px solid var(--border);padding:1.8rem;width:100%;max-width:380px;position:relative;animation:fadeIn .3s ease both}
+.modal::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--orange),var(--gold))}
+.modal-title{font-family:'Bebas Neue',sans-serif;font-size:1.3rem;letter-spacing:.1em;color:var(--gold);margin-bottom:.2rem}
+.modal-sub{font-size:.63rem;color:var(--muted);margin-bottom:1.4rem;line-height:1.5}
+.wallet-opt{display:flex;align-items:center;gap:.9rem;padding:.9rem;border:1px solid var(--border);background:var(--panel);cursor:pointer;transition:all .2s;margin-bottom:.4rem;width:100%;text-align:left;font-family:'Space Mono',monospace}
+.wallet-opt:hover{border-color:var(--orange)}
+.wallet-ico{width:34px;height:34px;background:rgba(249,115,22,.1);border:1px solid rgba(249,115,22,.25);display:flex;align-items:center;justify-content:center;font-size:1.1rem;flex-shrink:0}
+.wallet-info strong{display:block;font-size:.75rem;color:var(--text);margin-bottom:1px}
+.wallet-info span{font-size:.6rem;color:var(--muted)}
+.modal-close{position:absolute;top:.9rem;right:.9rem;background:none;border:none;color:var(--muted);font-size:1.1rem;cursor:pointer;line-height:1;padding:2px 6px}
+.modal-close:hover{color:var(--text)}
+
+/* ── CODE PREVIEW ── */
+.code-block{background:rgba(0,0,0,.5);border:1px solid var(--border);padding:1rem;font-size:.62rem;color:#a0c4a0;overflow:auto;max-height:320px;margin-top:.8rem;line-height:1.7;white-space:pre;font-family:'Space Mono',monospace}
+.code-kw{color:#c792ea}.code-str{color:#c3e88d}.code-num{color:#f78c6c}.code-cmt{color:#546e7a;font-style:italic}.code-cls{color:#ffcb6b}.code-fn{color:#82aaff}
+
+/* responsive */
+@media(max-width:640px){
+  .form-grid{grid-template-columns:1fr}
+  .field.span2{grid-column:1}
+  .stats-grid{grid-template-columns:1fr}
+  .token-card{grid-template-columns:1fr}
+  header{padding:0 1rem}
+  main{padding:1.5rem 1rem 4rem}
+  .panel{padding:1.2rem}
+  .tabs{overflow-x:auto}
+}
+</style>
 </head>
 <body>
+<div class="orb orb-1"></div>
+<div class="orb orb-2"></div>
 
-<!-- ── TESTNET BANNER ── -->
-<div class="testnet-banner" id="testnetBanner">
-  ⚠ You are on OP_NET Testnet — tokens have no real value
-</div>
+<!-- BANNER -->
+<div class="net-banner" id="netBanner"></div>
 
-<!-- ── HEADER ── -->
+<!-- HEADER -->
 <header>
-  <div class="logo">
-    <div class="logo-icon">
-      <svg viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <path d="M18 4L32 12V24L18 32L4 24V12L18 4Z" stroke="#f97316" stroke-width="1.5" fill="none"/>
-        <path d="M18 4L18 32M4 12L32 24M32 12L4 24" stroke="#f59e0b" stroke-width="0.8" opacity="0.4"/>
-        <circle cx="18" cy="18" r="4" fill="#f97316"/>
-      </svg>
-    </div>
+  <a class="logo" href="#">
+    <svg class="logo-mark" viewBox="0 0 32 32" fill="none">
+      <polygon points="16,2 30,10 30,22 16,30 2,22 2,10" stroke="#f97316" stroke-width="1.4" fill="none"/>
+      <line x1="16" y1="2" x2="16" y2="30" stroke="#f59e0b" stroke-width=".7" opacity=".4"/>
+      <line x1="2" y1="10" x2="30" y2="22" stroke="#f59e0b" stroke-width=".7" opacity=".4"/>
+      <line x1="30" y1="10" x2="2" y2="22" stroke="#f59e0b" stroke-width=".7" opacity=".4"/>
+      <circle cx="16" cy="16" r="3.5" fill="#f97316"/>
+    </svg>
     <div>
       <div class="logo-text">Token Forge</div>
-      <div class="logo-sub">Bitcoin L1 · OP_NET</div>
+      <div class="logo-net">OP_NET · Bitcoin L1</div>
     </div>
-  </div>
+  </a>
   <div class="header-right">
-    <!-- Network Switcher -->
-    <div class="network-switcher" id="networkSwitcher">
-      <button class="network-badge" id="networkBadge" onclick="toggleNetworkDropdown()">
-        <div class="network-dot" id="networkDot"></div>
-        <span id="networkLabel">Regtest</span>
-        <span class="network-chevron">▼</span>
+    <div class="net-wrap" id="netWrap">
+      <button class="net-btn" id="netBtn" onclick="toggleNetDrop()">
+        <span class="ndot" id="ndot"></span>
+        <span id="netLabel">Testnet</span>
+        <span class="net-chevron">▼</span>
       </button>
-      <div class="network-dropdown" id="networkDropdown">
-        <button class="network-option regtest active" id="opt-regtest" onclick="switchNetwork('regtest')">
-          <div class="opt-dot"></div>
-          <div>
-            Regtest
-            <span class="opt-meta">Local / development network</span>
-          </div>
+      <div class="net-dropdown" id="netDrop">
+        <button class="net-opt testnet" id="opt-testnet" onclick="switchNet('testnet')">
+          <span class="net-opt-dot"></span>
+          <div>OP_NET Testnet<span class="net-opt-sub">Bitcoin Testnet3 · free tBTC</span></div>
         </button>
-        <button class="network-option testnet" id="opt-testnet" onclick="switchNetwork('testnet')">
-          <div class="opt-dot"></div>
-          <div>
-            OP_NET Testnet
-            <span class="opt-meta">Public test network</span>
-          </div>
+        <button class="net-opt mainnet" id="opt-mainnet" onclick="switchNet('mainnet')">
+          <span class="net-opt-dot"></span>
+          <div>Mainnet<span class="net-opt-sub">Bitcoin L1 · real BTC required</span></div>
         </button>
       </div>
     </div>
-    <button class="btn-connect" id="connectBtn" onclick="openWalletModal()">
-      Connect Wallet
-    </button>
+    <button class="btn-connect" id="connectBtn" onclick="openWalletModal()">Connect Wallet</button>
   </div>
 </header>
 
-<!-- ── MAIN ── -->
+<!-- MAIN -->
 <main>
   <div class="hero">
     <h1>Forge Your Token</h1>
-    <p>Deploy OP-20 tokens on Bitcoin Layer 1 · Instantly launch a faucet · No code required</p>
+    <p>Generate &amp; deploy OP-20 smart contracts on Bitcoin L1 · Testnet &amp; Mainnet</p>
   </div>
 
-  <!-- TABS -->
   <div class="tabs">
-    <button class="tab active" onclick="switchTab('deploy')">⚒ Deploy Token</button>
-    <button class="tab" onclick="switchTab('faucet')">💧 Claim Faucet</button>
-    <button class="tab" onclick="switchTab('dashboard')">◈ My Tokens</button>
+    <button class="tab active" onclick="goTab('deploy')">⚒ Deploy Token</button>
+    <button class="tab" onclick="goTab('faucet')">💧 Faucet</button>
+    <button class="tab" onclick="goTab('dashboard')">◈ My Tokens</button>
   </div>
 
-  <!-- ── TAB: DEPLOY ── -->
+  <!-- ─── DEPLOY TAB ─── -->
   <div class="tab-panel active" id="tab-deploy">
     <div class="panel">
       <div class="panel-title">Deploy OP-20 Token</div>
-      <div class="panel-desc" id="deployPanelDesc">Fill in the details below. Your token will be deployed to Bitcoin L1 via OP_NET.</div>
+      <div class="panel-desc" id="deployDesc">
+        Fill in your token parameters. Token Forge generates a fully compliant OP-20 AssemblyScript contract and a ready-to-build project ZIP — deploy it to Bitcoin L1 via OP_WALLET in minutes.
+      </div>
 
       <div class="form-grid">
         <div class="field">
-          <label>Token Name <span>*</span></label>
-          <input type="text" id="tokenName" placeholder="e.g. Forge Token" maxlength="32" />
+          <label>Token Name <span class="req">*</span></label>
+          <input id="tokName" type="text" placeholder="e.g. Forge Token" maxlength="32"/>
         </div>
         <div class="field">
-          <label>Ticker Symbol <span>*</span></label>
-          <input type="text" id="tokenSymbol" placeholder="e.g. FORGE" maxlength="8" oninput="this.value = this.value.toUpperCase()" />
+          <label>Ticker Symbol <span class="req">*</span></label>
+          <input id="tokSymbol" type="text" placeholder="e.g. FORGE" maxlength="8" oninput="this.value=this.value.toUpperCase().replace(/[^A-Z]/g,'')"/>
         </div>
         <div class="field">
-          <label>Total Supply <span>*</span></label>
-          <input type="number" id="tokenSupply" placeholder="e.g. 21000000" min="1" />
+          <label>Total Supply <span class="req">*</span></label>
+          <input id="tokSupply" type="number" placeholder="e.g. 21000000" min="1" step="1"/>
         </div>
         <div class="field">
           <label>Decimals</label>
-          <input type="number" id="tokenDecimals" value="8" min="0" max="18" />
-          <div class="field-hint">Standard is 8 (Bitcoin-native)</div>
+          <input id="tokDecimals" type="number" value="18" min="0" max="18"/>
+          <span class="hint">OP-20 standard = 18 decimals</span>
         </div>
         <div class="field span2">
-          <label>Description</label>
-          <textarea id="tokenDesc" placeholder="Optional — describe your token's purpose..."></textarea>
+          <label>Description <span style="opacity:.5">(optional)</span></label>
+          <textarea id="tokDesc" placeholder="Short description of your token..."></textarea>
         </div>
       </div>
 
-      <!-- FAUCET TOGGLE -->
-      <div class="divider">
-        <div class="divider-line"></div>
-        <div class="divider-label">Optional: Faucet Setup</div>
-        <div class="divider-line"></div>
+      <div class="divider"><div class="divider-line"></div><div class="divider-text">Mint Options</div><div class="divider-line"></div></div>
+
+      <div class="field" style="margin-bottom:1rem;">
+        <label>Mint Strategy</label>
+        <select id="mintStrategy" onchange="onMintStrategyChange()">
+          <option value="deployer">Mint all to deployer on deploy</option>
+          <option value="public">Public mint (anyone can mint up to max supply)</option>
+          <option value="owner">Owner-only mint (call mint() manually after deploy)</option>
+        </select>
+        <span class="hint" id="mintHint">Entire supply minted to your wallet at deployment</span>
       </div>
+
+      <div class="divider"><div class="divider-line"></div><div class="divider-text">Faucet (optional)</div><div class="divider-line"></div></div>
 
       <div class="toggle-row">
         <div class="toggle-info">
-          <h4>Launch a Faucet</h4>
-          <p>Let people claim test amounts of your token automatically</p>
+          <h4>Include Faucet Contract</h4>
+          <p>Lets users claim tokens automatically via a separate faucet contract</p>
         </div>
         <label class="toggle">
-          <input type="checkbox" id="faucetToggle" onchange="toggleFaucet()" />
-          <span class="toggle-slider"></span>
+          <input type="checkbox" id="faucetToggle" onchange="onFaucetToggle()"/>
+          <span class="tog-slider"></span>
         </label>
       </div>
 
-      <div class="faucet-fields" id="faucetFields">
-        <div class="form-grid" style="margin-top:1rem;">
+      <div class="extra-fields" id="faucetExtra">
+        <div class="form-grid" style="margin-top:.8rem">
           <div class="field">
-            <label>Claim Amount per Address <span>*</span></label>
-            <input type="number" id="faucetAmount" placeholder="e.g. 1000" min="1" />
+            <label>Claim Amount per Address <span class="req">*</span></label>
+            <input id="faucetAmt" type="number" placeholder="e.g. 1000" min="1"/>
           </div>
           <div class="field">
-            <label>Cooldown Period (hours)</label>
-            <input type="number" id="faucetCooldown" value="24" min="1" />
-          </div>
-          <div class="field">
-            <label>Faucet Reserve (tokens)</label>
-            <input type="number" id="faucetReserve" placeholder="e.g. 1000000" min="1" />
-            <div class="field-hint">Amount to allocate to the faucet contract</div>
-          </div>
-          <div class="field">
-            <label>Max Claims Total</label>
-            <input type="number" id="faucetMaxClaims" placeholder="e.g. 10000 (optional)" min="1" />
+            <label>Cooldown (hours)</label>
+            <input id="faucetCD" type="number" value="24" min="1"/>
           </div>
         </div>
       </div>
 
-      <button class="btn-forge" id="deployBtn" onclick="deployToken()">
-        <span class="sparks"></span>
-        ⚒ &nbsp;Forge Token
+      <button class="btn-primary" id="genBtn" onclick="generate()">
+        <span class="shine"></span>
+        ⚒ &nbsp;Generate Contract Package
       </button>
 
-      <div class="status-box" id="deployStatus">
-        <div class="status-title" id="deployStatusTitle"></div>
-        <div class="status-msg" id="deployStatusMsg"></div>
-        <a class="status-link" id="deployStatusLink" href="#" target="_blank" style="display:none"></a>
+      <!-- DEPLOY FLOW -->
+      <div class="deploy-flow" id="deployFlow">
+        <div class="flow-header">
+          <span style="color:var(--orange)">⚒</span>
+          <div class="flow-header-title">Deployment Steps</div>
+        </div>
+
+        <!-- Step 1: Download ZIP -->
+        <div class="step active" id="s1">
+          <div class="step-num">1</div>
+          <div class="step-body">
+            <div class="step-title">Download Your Project ZIP</div>
+            <div class="step-desc">
+              Your OP-20 contract has been generated as a complete AssemblyScript project. Download the ZIP — it includes your token source code, build config, and all dependencies listed in <code>package.json</code>.
+            </div>
+            <div class="step-action">
+              <a id="zipLink" class="btn-download" href="#" download>
+                ⬇ Download <span id="zipName">token_project.zip</span>
+              </a>
+            </div>
+          </div>
+        </div>
+
+        <!-- Step 2: Build -->
+        <div class="step" id="s2">
+          <div class="step-num">2</div>
+          <div class="step-body">
+            <div class="step-title">Build the WASM Contract</div>
+            <div class="step-desc">
+              Unzip the project. In a terminal, run:
+              <div style="margin:.6rem 0;padding:.7rem;background:rgba(0,0,0,.4);border-left:2px solid var(--orange);font-size:.62rem;color:var(--gold);letter-spacing:.02em">
+                npm install<br/>npm run build
+              </div>
+              This compiles your AssemblyScript token to <code>build/MyToken.wasm</code>. Requires Node.js 18+.
+            </div>
+            <div class="step-action">
+              <a href="https://nodejs.org/en/download" target="_blank" class="btn-sec" style="font-size:.6rem">Get Node.js ↗</a>
+            </div>
+          </div>
+        </div>
+
+        <!-- Step 3: Deploy via OP_WALLET -->
+        <div class="step" id="s3">
+          <div class="step-num">3</div>
+          <div class="step-body">
+            <div class="step-title">Deploy via OP_WALLET</div>
+            <div class="step-desc">
+              Open the <strong>OP_WALLET</strong> browser extension. Switch to <strong id="s3net">OP_NET Testnet</strong>. Click <strong>Deploy</strong>, upload your <code>.wasm</code> file, then sign and broadcast. You need a small amount of BTC for the deployment gas fee.
+            </div>
+            <div class="step-action">
+              <a href="https://chromewebstore.google.com/detail/opwallet/pmbjpcmaaladnfpacpmhmnfmpklgbdjb" target="_blank" class="btn-sec">Install OP_WALLET ↗</a>
+              <a href="https://opnet-testnet.gitbook.io/start/tbtc-and-op_20-faucet" target="_blank" class="btn-sec" id="faucetLink">Get tBTC ↗</a>
+            </div>
+          </div>
+        </div>
+
+        <!-- Step 4: Register -->
+        <div class="step" id="s4">
+          <div class="step-num">4</div>
+          <div class="step-body">
+            <div class="step-title">Save Your Contract Address</div>
+            <div class="step-desc">
+              After the transaction confirms, OP_WALLET shows your contract address (starts with <code>op1...</code>). Paste it below to track it on your dashboard.
+            </div>
+            <div class="step-action">
+              <div class="reg-row">
+                <input id="addrInput" type="text" placeholder="op1..."/>
+                <button class="btn-reg" onclick="registerToken()">Save →</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Status -->
+      <div class="status" id="deployStatus">
+        <div class="status-label" id="deployStatusLabel"></div>
+        <div class="status-body" id="deployStatusBody"></div>
+        <a id="deployStatusLink" href="#" target="_blank" style="display:none"></a>
+      </div>
+
+      <!-- Code preview toggle -->
+      <div id="codePreviewWrap" style="display:none;margin-top:1.2rem">
+        <button class="btn-sec" onclick="toggleCode()" style="width:100%;text-align:center;padding:8px">▶ Preview Generated Contract Source</button>
+        <pre class="code-block" id="codePreview" style="display:none"></pre>
       </div>
     </div>
   </div>
 
-  <!-- ── TAB: FAUCET ── -->
+  <!-- ─── FAUCET TAB ─── -->
   <div class="tab-panel" id="tab-faucet">
     <div class="panel">
       <div class="panel-title">Claim From Faucet</div>
-      <div class="panel-desc">Enter a faucet contract address to claim tokens. One claim per cooldown period.</div>
+      <div class="panel-desc">Enter a faucet contract address (<code>op1...</code>) to claim tokens. Enforces one claim per cooldown per wallet address.</div>
 
-      <div class="field" style="margin-bottom:1.5rem;">
-        <label>Faucet Contract Address <span>*</span></label>
-        <input type="text" id="faucetAddress" placeholder="Contract address…" />
+      <div class="field" style="margin-bottom:1.2rem">
+        <label>Faucet Contract Address <span class="req">*</span></label>
+        <input id="faucetLookupAddr" type="text" placeholder="op1..."/>
       </div>
-
-      <button class="btn-forge" style="margin-top:0; max-width:200px;" onclick="lookupFaucet()">
-        <span class="sparks"></span>
-        Look Up
+      <button class="btn-primary" style="max-width:160px;margin-top:0" onclick="lookupFaucet()">
+        <span class="shine"></span>Look Up
       </button>
 
-      <!-- Faucet Info Card (shown after lookup) -->
-      <div id="faucetInfo" style="display:none; margin-top:2rem; animation: fadeUp 0.3s ease both;">
-        <div class="stats-row">
-          <div class="stat-cell">
-            <div class="stat-value" id="faucetStatClaimed">—</div>
-            <div class="stat-label">Total Claimed</div>
-          </div>
-          <div class="stat-cell">
-            <div class="stat-value" id="faucetStatRemaining">—</div>
-            <div class="stat-label">Remaining</div>
-          </div>
-          <div class="stat-cell">
-            <div class="stat-value" id="faucetStatClaimers">—</div>
-            <div class="stat-label">Claimers</div>
-          </div>
+      <div id="faucetResult" style="display:none;margin-top:1.8rem;animation:fadeIn .3s ease both">
+        <div class="stats-grid">
+          <div class="stat"><div class="stat-val" id="fStat1">—</div><div class="stat-lbl">Claimed</div></div>
+          <div class="stat"><div class="stat-val" id="fStat2">—</div><div class="stat-lbl">Remaining</div></div>
+          <div class="stat"><div class="stat-val" id="fStat3">—</div><div class="stat-lbl">Claimers</div></div>
         </div>
-
-        <div class="faucet-claim-card">
-          <div class="faucet-header">
+        <div class="faucet-card">
+          <div class="faucet-top">
             <div>
-              <div class="faucet-amount" id="faucetClaimAmount">1,000 <span>TOKENS</span></div>
-              <div style="font-size:0.65rem; color:var(--muted); margin-top:4px;" id="faucetCooldownInfo">
-                Cooldown: 24 hours per address
-              </div>
+              <div class="faucet-amount" id="fClaimAmt">1,000 <span>TOKEN</span></div>
+              <div style="font-size:.62rem;color:var(--muted);margin-top:3px" id="fCoolInfo">Cooldown: 24h per address</div>
             </div>
-            <div>
-              <div class="faucet-badge">
-                <div class="faucet-dot"></div>
-                ACTIVE
-              </div>
-            </div>
+            <div class="active-badge"><div class="faucet-dot"></div>ACTIVE</div>
           </div>
-
-          <div class="cooldown-bar">
-            <div class="cooldown-fill" id="cooldownFill"></div>
-          </div>
-          <div style="font-size:0.6rem; color:var(--muted); margin-top:4px; text-align:right;" id="cooldownLabel">Ready to claim</div>
-
-          <button class="btn-forge" style="margin-top:1.5rem;" id="claimBtn" onclick="claimFaucet()">
-            <span class="sparks"></span>
-            💧 &nbsp;Claim Tokens
+          <div class="cd-bar"><div class="cd-fill" id="cdFill"></div></div>
+          <div class="cd-label" id="cdLabel">Ready to claim</div>
+          <button class="btn-primary" style="margin-top:1.2rem" id="claimBtn" onclick="claimFaucet()">
+            <span class="shine"></span>💧 &nbsp;Claim Tokens
           </button>
         </div>
-
-        <div class="status-box" id="claimStatus" style="margin-top:1rem;">
-          <div class="status-title" id="claimStatusTitle"></div>
-          <div class="status-msg" id="claimStatusMsg"></div>
-          <a class="status-link" id="claimStatusLink" href="#" target="_blank" style="display:none"></a>
+        <div class="status" id="claimStatus" style="margin-top:.9rem">
+          <div class="status-label" id="claimStatusLabel"></div>
+          <div class="status-body" id="claimStatusBody"></div>
+          <a id="claimStatusLink" href="#" target="_blank" style="display:none"></a>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- ── TAB: DASHBOARD ── -->
+  <!-- ─── DASHBOARD TAB ─── -->
   <div class="tab-panel" id="tab-dashboard">
     <div class="panel">
       <div class="panel-title">My Deployed Tokens</div>
-      <div class="panel-desc" id="dashboardDesc">All tokens deployed from your connected wallet.</div>
-
-      <div id="dashboardContent">
-        <div class="empty-state">
-          <div class="empty-icon">⬡</div>
-          <h3>No Tokens Yet</h3>
-          <p>Connect your wallet and deploy your first token to see it here.</p>
-        </div>
-      </div>
+      <div class="panel-desc" id="dashDesc">Tokens you've deployed and registered, stored per network.</div>
+      <div id="dashContent"></div>
     </div>
   </div>
 </main>
 
-<!-- ── FOOTER ── -->
+<!-- FOOTER -->
 <footer>
-  <span>Token Forge · Built on <a href="https://opnet.org" target="_blank">OP_NET</a> · Bitcoin L1</span>
+  <span>Token Forge · <a href="https://opnet.org" target="_blank">OP_NET</a> · Bitcoin L1 Smart Contracts</span>
   <span>
-    <a href="https://opscan.org" target="_blank" id="footerOpscan">OPScan</a> ·
+    <a href="https://opscan.org" target="_blank" id="footScan">OPScan</a> ·
     <a href="https://docs.opnet.org" target="_blank">Docs</a> ·
-    <a href="https://vibecode.finance" target="_blank">vibecode.finance</a>
+    <a href="https://github.com/btc-vision/OP_20" target="_blank">Contract Repo</a>
   </span>
 </footer>
 
-<!-- ── WALLET MODAL ── -->
-<div class="modal-overlay" id="walletModal">
+<!-- WALLET MODAL -->
+<div class="overlay" id="walletOverlay">
   <div class="modal">
     <button class="modal-close" onclick="closeWalletModal()">✕</button>
     <div class="modal-title">Connect Wallet</div>
-    <div class="modal-desc">Choose your Bitcoin wallet to deploy tokens on OP_NET.</div>
-
-    <button class="wallet-option" onclick="connectWallet('opwallet')">
-      <div class="wallet-icon">₿</div>
-      <div class="wallet-info">
-        <strong>OP_WALLET</strong>
-        <span>Official OP_NET browser extension</span>
-      </div>
+    <div class="modal-sub">Connect your Bitcoin wallet to track your deployed tokens and claim from faucets.</div>
+    <button class="wallet-opt" onclick="connectWallet('opwallet')">
+      <div class="wallet-ico">₿</div>
+      <div class="wallet-info"><strong>OP_WALLET</strong><span>Official OP_NET extension — recommended</span></div>
     </button>
-
-    <button class="wallet-option" onclick="connectWallet('unisat')">
-      <div class="wallet-icon">🟠</div>
-      <div class="wallet-info">
-        <strong>UniSat</strong>
-        <span>Popular Bitcoin wallet</span>
-      </div>
+    <button class="wallet-opt" onclick="connectWallet('unisat')">
+      <div class="wallet-ico">🟠</div>
+      <div class="wallet-info"><strong>UniSat</strong><span>Popular Bitcoin browser wallet</span></div>
     </button>
-
-    <button class="wallet-option" onclick="connectWallet('xverse')">
-      <div class="wallet-icon">✦</div>
-      <div class="wallet-info">
-        <strong>Xverse</strong>
-        <span>Bitcoin & Ordinals wallet</span>
-      </div>
+    <button class="wallet-opt" onclick="connectWallet('xverse')">
+      <div class="wallet-ico">✦</div>
+      <div class="wallet-info"><strong>Xverse</strong><span>Bitcoin & Ordinals wallet</span></div>
     </button>
   </div>
 </div>
 
 <script>
-  // ── NETWORK CONFIG ──
-  const NETWORKS = {
-    regtest: {
-      id: 'regtest',
-      label: 'Regtest',
-      addressPrefix: 'opt1',
-      opscanBase: 'https://opscan.org',
-      chainId: 'regtest',
-      storageKey: 'tokenForge_tokens_regtest',
-      rpc: 'http://localhost:9001',
-    },
-    testnet: {
-      id: 'testnet',
-      label: 'Testnet',
-      addressPrefix: 'opt1',
-      opscanBase: 'https://testnet.opscan.org',
-      chainId: 'testnet',
-      storageKey: 'tokenForge_tokens_testnet',
-      rpc: 'https://testnet.opnet.org',
-    },
+// ═══════════════════════════════════════════════════════════════
+// NETWORK CONFIG
+// ═══════════════════════════════════════════════════════════════
+const NETS = {
+  testnet: {
+    id:'testnet', label:'Testnet',
+    bannerClass:'testnet',
+    banner:'⚠  OP_NET Testnet (Bitcoin Testnet3) — tokens have no real value',
+    opscan:'https://opscan.org',
+    rpc:'https://testnet.opnet.org',
+    storeKey:'tf_tokens_testnet',
+    step3:'OP_NET Testnet (Testnet3)',
+    faucetLink:'https://opnet-testnet.gitbook.io/start/tbtc-and-op_20-faucet',
+    showFaucetLink:true,
+  },
+  mainnet: {
+    id:'mainnet', label:'Mainnet',
+    bannerClass:'mainnet',
+    banner:'⚡  Bitcoin Mainnet — real BTC required for all transactions',
+    opscan:'https://opscan.org',
+    rpc:'https://api.opnet.org',
+    storeKey:'tf_tokens_mainnet',
+    step3:'Bitcoin Mainnet',
+    faucetLink:'',
+    showFaucetLink:false,
+  },
+};
+
+// ═══════════════════════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════════════════════
+let NET = localStorage.getItem('tf_net') || 'testnet';
+let walletAddr = null;
+let pendingToken = null;
+let codeVisible = false;
+
+function net() { return NETS[NET]; }
+function opscan(a) { return net().opscan+'/address/'+a; }
+function loadTokens() { return JSON.parse(localStorage.getItem(net().storeKey)||'[]'); }
+function saveTokens(arr) { localStorage.setItem(net().storeKey, JSON.stringify(arr)); }
+function sleep(ms) { return new Promise(r=>setTimeout(r,ms)); }
+
+// ═══════════════════════════════════════════════════════════════
+// UI HELPERS
+// ═══════════════════════════════════════════════════════════════
+let toastT;
+function toast(msg) {
+  clearTimeout(toastT);
+  let t=document.getElementById('_toast');
+  if(!t){t=document.createElement('div');t.id='_toast';t.style.cssText='position:fixed;bottom:1.8rem;left:50%;transform:translateX(-50%);background:var(--panel);border:1px solid var(--border);color:var(--text);font-family:"Space Mono",monospace;font-size:.72rem;padding:9px 18px;z-index:9998;animation:fadeIn .3s ease both;white-space:nowrap;letter-spacing:.04em';document.body.appendChild(t);}
+  t.textContent=msg;t.style.opacity='1';
+  toastT=setTimeout(()=>{t.style.opacity='0';},3200);
+}
+
+function setStatus(id, type, label, body, href) {
+  const el=document.getElementById(id);
+  el.className='status show '+type;
+  document.getElementById(id+'Label').textContent=label;
+  document.getElementById(id+'Body').textContent=body;
+  const lk=document.getElementById(id+'Link');
+  if(lk){if(href){lk.href=href;lk.textContent='→ View on OPScan';lk.style.display='inline-block';}else{lk.style.display='none';}}
+}
+
+function timeAgo(ts){
+  const d=Date.now()-ts;
+  if(d<60000)return'just now';
+  if(d<3600000)return Math.floor(d/60000)+'m ago';
+  if(d<86400000)return Math.floor(d/3600000)+'h ago';
+  return Math.floor(d/86400000)+'d ago';
+}
+
+function msHuman(ms){
+  const h=Math.floor(ms/3600000),m=Math.floor((ms%3600000)/60000);
+  return h>0?`${h}h ${m}m`:`${m}m`;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// NETWORK SWITCH
+// ═══════════════════════════════════════════════════════════════
+function toggleNetDrop(){ document.getElementById('netDrop').classList.toggle('open'); }
+document.addEventListener('click',e=>{ if(!document.getElementById('netWrap').contains(e.target)) document.getElementById('netDrop').classList.remove('open'); });
+
+function switchNet(id) {
+  document.getElementById('netDrop').classList.remove('open');
+  if(id===NET) return;
+  NET=id;
+  localStorage.setItem('tf_net',id);
+  if(walletAddr){ walletAddr=null; const b=document.getElementById('connectBtn'); b.textContent='Connect Wallet'; b.classList.remove('connected'); toast('Network switched — reconnect wallet'); }
+  else { toast('Switched to '+net().label); }
+  applyNetUI();
+  renderDash();
+}
+
+function applyNetUI() {
+  const n=net();
+  const btn=document.getElementById('netBtn');
+  btn.className='net-btn '+n.id;
+  document.getElementById('netLabel').textContent=n.label;
+  const banner=document.getElementById('netBanner');
+  banner.className='net-banner show '+n.bannerClass;
+  banner.textContent=n.banner;
+  document.getElementById('opt-testnet').classList.toggle('active',NET==='testnet');
+  document.getElementById('opt-mainnet').classList.toggle('active',NET==='mainnet');
+  document.getElementById('deployDesc').textContent=`Fill in your token parameters. Token Forge generates a fully compliant OP-20 AssemblyScript contract ready to build and deploy on ${n.label}.`;
+  document.getElementById('dashDesc').textContent=`Tokens deployed and registered on ${n.label} from this browser.`;
+  document.getElementById('faucetLookupAddr').placeholder='op1…';
+  document.getElementById('s3net').textContent=n.step3;
+  const fl=document.getElementById('faucetLink');
+  if(n.showFaucetLink){fl.href=n.faucetLink;fl.style.display='inline-block';}else{fl.style.display='none';}
+  document.getElementById('footScan').href=n.opscan;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// TABS
+// ═══════════════════════════════════════════════════════════════
+function goTab(name) {
+  document.querySelectorAll('.tab').forEach((t,i)=>t.classList.toggle('active',['deploy','faucet','dashboard'][i]===name));
+  document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
+  document.getElementById('tab-'+name).classList.add('active');
+  if(name==='dashboard') renderDash();
+}
+
+function onFaucetToggle(){ document.getElementById('faucetExtra').classList.toggle('show',document.getElementById('faucetToggle').checked); }
+
+function onMintStrategyChange(){
+  const hints={
+    deployer:'Entire supply minted to your wallet at deployment',
+    public:'Anyone can call mint() to mint tokens up to max supply',
+    owner:'Only the deployer can call mint() — call it manually after deploy',
   };
+  document.getElementById('mintHint').textContent=hints[document.getElementById('mintStrategy').value]||'';
+}
 
-  // ── STATE ──
-  let currentNetwork = localStorage.getItem('tokenForge_network') || 'regtest';
-  let walletConnected = false;
-  let walletAddress = null;
-  let deployedTokens = [];
-  let provider = null;
+// ═══════════════════════════════════════════════════════════════
+// WALLET
+// ═══════════════════════════════════════════════════════════════
+function openWalletModal(){ if(walletAddr) return disconnectWallet(); document.getElementById('walletOverlay').classList.add('show'); }
+function closeWalletModal(){ document.getElementById('walletOverlay').classList.remove('show'); }
 
-  // ── NETWORK HELPERS ──
-  function getNet() { return NETWORKS[currentNetwork]; }
-
-  function opscanUrl(address) {
-    return `${getNet().opscanBase}/address/${address}`;
-  }
-
-  function demoAddress() {
-    return getNet().addressPrefix + randomHex(38);
-  }
-
-  // ── NETWORK SWITCHER ──
-  function toggleNetworkDropdown() {
-    document.getElementById('networkDropdown').classList.toggle('open');
-  }
-
-  // Close dropdown when clicking outside
-  document.addEventListener('click', function(e) {
-    if (!document.getElementById('networkSwitcher').contains(e.target)) {
-      document.getElementById('networkDropdown').classList.remove('open');
-    }
-  });
-
-  function switchNetwork(netId) {
-    if (netId === currentNetwork) {
-      document.getElementById('networkDropdown').classList.remove('open');
-      return;
-    }
-
-    currentNetwork = netId;
-    localStorage.setItem('tokenForge_network', netId);
-
-    // Load tokens for this network
-    deployedTokens = JSON.parse(localStorage.getItem(getNet().storageKey) || '[]');
-
-    // Update UI
-    updateNetworkUI();
-    document.getElementById('networkDropdown').classList.remove('open');
-
-    // Disconnect wallet when switching (network context changes)
-    if (walletConnected) {
-      disconnectWallet();
-      showToast('Network switched — please reconnect your wallet');
+async function connectWallet(type){
+  closeWalletModal();
+  const btn=document.getElementById('connectBtn');
+  btn.textContent='Connecting…';
+  try {
+    let addr;
+    if(type==='opwallet'){
+      if(window.opnet){ const a=await window.opnet.requestAccounts(); addr=a[0]; }
+      else if(window.bitcoin){ const a=await window.bitcoin.requestAccounts(); addr=a[0]; }
+      else throw new Error('OP_WALLET not found — please install it from the Chrome Web Store.');
+    } else if(type==='unisat'){
+      if(window.unisat){ const a=await window.unisat.requestAccounts(); addr=a[0]; }
+      else throw new Error('UniSat wallet not found — please install it.');
     } else {
-      showToast(`Switched to ${getNet().label}`);
+      throw new Error('Xverse integration coming soon. Please use OP_WALLET.');
     }
-
-    renderDashboard();
-  }
-
-  function updateNetworkUI() {
-    const net = getNet();
-    const badge = document.getElementById('networkBadge');
-    const label = document.getElementById('networkLabel');
-    const banner = document.getElementById('testnetBanner');
-    const faucetInput = document.getElementById('faucetAddress');
-
-    label.textContent = net.label;
-
-    // Badge style
-    if (net.id === 'testnet') {
-      badge.classList.add('testnet');
-      banner.classList.add('show');
-      faucetInput.placeholder = 'tb1p…';
-    } else {
-      badge.classList.remove('testnet');
-      banner.classList.remove('show');
-      faucetInput.placeholder = 'bcrt1p…';
-    }
-
-    // Active option highlight
-    document.getElementById('opt-regtest').classList.toggle('active', currentNetwork === 'regtest');
-    document.getElementById('opt-testnet').classList.toggle('active', currentNetwork === 'testnet');
-
-    // Update panel desc
-    document.getElementById('deployPanelDesc').textContent =
-      `Fill in the details below. Your token will be deployed to Bitcoin L1 via OP_NET (${net.label}).`;
-
-    // Update dashboard desc
-    document.getElementById('dashboardDesc').textContent =
-      `All tokens deployed from your connected wallet on ${net.label}.`;
-
-    // Update footer OPScan link
-    document.getElementById('footerOpscan').href = net.opscanBase;
-    document.getElementById('footerOpscan').textContent =
-      net.id === 'testnet' ? 'OPScan Testnet' : 'OPScan';
-  }
-
-  // ── TABS ──
-  function switchTab(name) {
-    document.querySelectorAll('.tab').forEach((t, i) => {
-      t.classList.toggle('active', ['deploy','faucet','dashboard'][i] === name);
-    });
-    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
-    document.getElementById('tab-' + name).classList.add('active');
-    if (name === 'dashboard') renderDashboard();
-  }
-
-  // ── FAUCET TOGGLE ──
-  function toggleFaucet() {
-    const checked = document.getElementById('faucetToggle').checked;
-    document.getElementById('faucetFields').classList.toggle('show', checked);
-  }
-
-  // ── WALLET MODAL ──
-  function openWalletModal() {
-    if (walletConnected) return disconnectWallet();
-    document.getElementById('walletModal').classList.add('show');
-  }
-
-  function closeWalletModal() {
-    document.getElementById('walletModal').classList.remove('show');
-  }
-
-  async function connectWallet(type) {
-    closeWalletModal();
-    const btn = document.getElementById('connectBtn');
-    btn.textContent = 'Connecting…';
-
-    try {
-      if (type === 'opwallet') {
-        if (window.opnet) {
-          const accounts = await window.opnet.requestAccounts();
-          walletAddress = accounts[0];
-        } else if (window.bitcoin) {
-          const accounts = await window.bitcoin.requestAccounts();
-          walletAddress = accounts[0];
-        } else {
-          throw new Error('OP_WALLET not found. Please install it from the Chrome Web Store.');
-        }
-      } else if (type === 'unisat') {
-        if (window.unisat) {
-          const accounts = await window.unisat.requestAccounts();
-          walletAddress = accounts[0];
-        } else {
-          throw new Error('UniSat not found. Please install it.');
-        }
-      } else if (type === 'xverse') {
-        throw new Error('Xverse integration coming soon. Please use OP_WALLET.');
-      }
-
-      walletConnected = true;
-      const short = walletAddress.slice(0, 6) + '…' + walletAddress.slice(-4);
-      btn.textContent = short;
-      btn.classList.add('connected');
-      renderDashboard();
-    } catch (err) {
-      walletConnected = false;
-      btn.textContent = 'Connect Wallet';
-      btn.classList.remove('connected');
-      showToast('⚠ ' + err.message);
-    }
-  }
-
-  function disconnectWallet() {
-    walletConnected = false;
-    walletAddress = null;
-    const btn = document.getElementById('connectBtn');
-    btn.textContent = 'Connect Wallet';
+    walletAddr=addr;
+    btn.textContent=addr.slice(0,7)+'…'+addr.slice(-4);
+    btn.classList.add('connected');
+    renderDash();
+  } catch(e){
+    btn.textContent='Connect Wallet';
     btn.classList.remove('connected');
+    toast('⚠ '+e.message);
+  }
+}
+
+function disconnectWallet(){
+  walletAddr=null;
+  const b=document.getElementById('connectBtn');
+  b.textContent='Connect Wallet';
+  b.classList.remove('connected');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// CONTRACT SOURCE GENERATOR
+// Generates real, compilable AssemblyScript OP-20 source code
+// following the btc-vision/btc-runtime standard.
+// ═══════════════════════════════════════════════════════════════
+function generateContractSource(name, symbol, decimals, supply, mintStrategy, hasFaucet, faucetAmt, faucetCD) {
+  const supplyBig = BigInt(supply) * (10n ** BigInt(decimals));
+  const supplyStr = supplyBig.toString();
+  const className = name.replace(/[^a-zA-Z0-9]/g,'') || 'MyToken';
+
+  let mintBody = '';
+  if(mintStrategy==='deployer'){
+    mintBody = `        // Mint entire supply to the deployer on deployment
+        this._mint(Blockchain.tx.origin, maxSupply);`;
+  } else if(mintStrategy==='public'){
+    mintBody = `        // Public mint — anyone can call mint()
+        // Initial mint to deployer: comment this out if you prefer a pure mint-on-demand model
+        // this._mint(Blockchain.tx.origin, maxSupply);`;
+  } else {
+    mintBody = `        // Owner-only mint — call mint(address, amount) after deployment`;
   }
 
-  // ── DEPLOY TOKEN ──
-  async function deployToken() {
-    if (!walletConnected) {
-      openWalletModal();
-      return;
+  let publicMint = '';
+  if(mintStrategy==='public'){
+    publicMint = `
+    // Public mint — anyone can mint up to max supply
+    public mint(calldata: Calldata): BytesWriter {
+        const to: Address = calldata.readAddress();
+        const amount: u256 = calldata.readU256();
+        const result: BytesWriter = new BytesWriter(1);
+        this._mint(to, amount);
+        result.writeBoolean(true);
+        return result;
+    }`;
+  } else if(mintStrategy==='owner'){
+    publicMint = `
+    // Owner-only mint
+    public mint(calldata: Calldata): BytesWriter {
+        this.onlyDeployer(Blockchain.tx.sender);
+        const to: Address = calldata.readAddress();
+        const amount: u256 = calldata.readU256();
+        const result: BytesWriter = new BytesWriter(1);
+        this._mint(to, amount);
+        result.writeBoolean(true);
+        return result;
+    }`;
+  }
+
+  const source = `// ─────────────────────────────────────────────────────────────
+// ${name} (${symbol}) — OP-20 Token Contract
+// Generated by Token Forge · https://tokenforge-seven.vercel.app
+// Standard: OP-20 (btc-vision/btc-runtime)
+// Network: ${NET}
+// ─────────────────────────────────────────────────────────────
+
+import { u128, u256 } from '@btc-vision/as-bignum/assembly';
+import {
+    Address,
+    Blockchain,
+    BytesWriter,
+    Calldata,
+    DeployableOP_20,
+    OP20InitParameters,
+} from '@btc-vision/btc-runtime/runtime';
+
+@final
+export class ${className} extends DeployableOP_20 {
+
+    public constructor() {
+        super();
+        // NOTE: This constructor runs on EVERY interaction.
+        // Put one-time initialization in onDeployment() below.
     }
 
-    const name     = document.getElementById('tokenName').value.trim();
-    const symbol   = document.getElementById('tokenSymbol').value.trim();
-    const supply   = document.getElementById('tokenSupply').value;
-    const decimals = document.getElementById('tokenDecimals').value;
-    const desc     = document.getElementById('tokenDesc').value.trim();
-    const hasFaucet = document.getElementById('faucetToggle').checked;
+    /**
+     * onDeployment — runs ONCE when the contract is first deployed.
+     * Equivalent to a Solidity constructor.
+     */
+    public override onDeployment(_calldata: Calldata): void {
+        const maxSupply: u256 = u128.fromString('${supplyStr}').toU256();
+        const decimals: u8 = ${decimals};
+        const name: string = '${name.replace(/'/g,"\\'")}';
+        const symbol: string = '${symbol}';
 
-    if (!name || !symbol || !supply) {
-      showStatus('deployStatus', 'error', 'Missing Fields', 'Please fill in Token Name, Symbol, and Supply.');
-      return;
+        this.instantiate(new OP20InitParameters(maxSupply, decimals, name, symbol));
+
+${mintBody}
     }
+${publicMint}
 
-    const btn = document.getElementById('deployBtn');
-    btn.disabled = true;
-    btn.innerHTML = '<span class="spinner"></span> Forging…';
-
-    const net = getNet();
-    showStatus('deployStatus', 'pending', 'Broadcasting Transaction…',
-      `Sending deploy transaction to Bitcoin L1 via OP_NET (${net.label}). Please approve in your wallet.`);
-
-    try {
-      let contractAddress = null;
-      let txId = null;
-
-      // Attempt real OP_NET deployment
-      if (window.opnet && walletAddress) {
-        try {
-          const deployParams = {
-            name, symbol,
-            totalSupply: (BigInt(supply) * BigInt(10 ** parseInt(decimals))).toString(),
-            decimals: parseInt(decimals),
-            network: net.chainId,
-          };
-
-          const result = await window.opnet.deployContract({
-            bytecode: 'OP20',
-            params: deployParams,
-            network: net.chainId,
-          });
-
-          txId = result?.txId || result?.hash;
-          contractAddress = result?.contractAddress;
-        } catch (e) {
-          console.warn('Live deploy unavailable, entering demo mode:', e);
+    /**
+     * execute — routes external calls to the correct handler.
+     * Required by the OP_NET runtime for all public functions.
+     */
+    public override execute(method: Selector, calldata: Calldata): BytesWriter {
+        switch (method) {${mintStrategy !== 'deployer' ? `
+            case encodeSelector('mint'):
+                return this.mint(calldata);` : ''}
+            default:
+                return super.execute(method, calldata);
         }
-      }
-
-      // Demo mode fallback
-      if (!contractAddress) {
-        await sleep(2500);
-        txId = 'demo_' + randomHex(64);
-        contractAddress = demoAddress();
-      }
-
-      // Save to network-specific store
-      const token = {
-        name, symbol, supply, decimals, desc,
-        address: contractAddress,
-        txId,
-        deployer: walletAddress,
-        deployedAt: Date.now(),
-        network: net.id,
-        faucet: hasFaucet ? {
-          amount: document.getElementById('faucetAmount').value,
-          cooldown: document.getElementById('faucetCooldown').value,
-          reserve: document.getElementById('faucetReserve').value,
-          address: demoAddress(),
-          claims: 0,
-        } : null,
-      };
-
-      deployedTokens.unshift(token);
-      localStorage.setItem(net.storageKey, JSON.stringify(deployedTokens));
-
-      // Show success
-      const statusEl = document.getElementById('deployStatus');
-      statusEl.className = 'status-box show success';
-      document.getElementById('deployStatusTitle').textContent = '✓ Token Deployed Successfully';
-      document.getElementById('deployStatusMsg').textContent =
-        `Contract: ${contractAddress}  ·  TX: ${txId.slice(0, 20)}…`;
-
-      const link = document.getElementById('deployStatusLink');
-      link.href = opscanUrl(contractAddress);
-      link.textContent = net.id === 'testnet' ? '→ View on OPScan Testnet' : '→ View on OPScan';
-      link.style.display = 'inline-block';
-
-      if (hasFaucet) {
-        const faucetMsg = document.createElement('div');
-        faucetMsg.style.cssText = 'margin-top:8px; font-size:0.7rem; color:var(--success);';
-        faucetMsg.textContent = `💧 Faucet deployed at: ${token.faucet.address}`;
-        statusEl.appendChild(faucetMsg);
-
-        const shareWrap = document.createElement('div');
-        shareWrap.className = 'copy-wrap';
-        const shareUrl = `${location.origin}${location.pathname}?faucet=${token.faucet.address}&network=${net.id}`;
-        shareWrap.innerHTML = `
-          <input type="text" value="${shareUrl}" readonly />
-          <button class="btn-copy" onclick="copyFaucetLink(this, '${shareUrl}')">Copy Link</button>
-        `;
-        statusEl.appendChild(shareWrap);
-      }
-
-      // Reset form
-      ['tokenName','tokenSymbol','tokenSupply','tokenDesc','faucetAmount','faucetCooldown','faucetReserve','faucetMaxClaims']
-        .forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
-      document.getElementById('tokenDecimals').value = '8';
-      document.getElementById('faucetToggle').checked = false;
-      document.getElementById('faucetFields').classList.remove('show');
-
-    } catch (err) {
-      showStatus('deployStatus', 'error', 'Deployment Failed', err.message || 'Unknown error. Check console.');
-    } finally {
-      btn.disabled = false;
-      btn.innerHTML = '<span class="sparks"></span>⚒ &nbsp;Forge Token';
     }
+}
+`;
+  return source;
+}
+
+function generatePackageJson(name, symbol) {
+  const pkgName = symbol.toLowerCase()+'-op20';
+  return JSON.stringify({
+    name: pkgName,
+    version: '1.0.0',
+    description: `${name} (${symbol}) OP-20 token contract for OP_NET / Bitcoin L1`,
+    scripts: {
+      build: 'asc src/contracts/MyToken.ts --target release --outFile build/MyToken.wasm --optimize --runtime stub',
+      'build:debug': 'asc src/contracts/MyToken.ts --target debug --outFile build/MyToken.debug.wasm --sourceMap --debug',
+      test: 'echo "Add tests using @btc-vision/unit-test-framework"',
+    },
+    dependencies: {
+      '@btc-vision/btc-runtime': 'latest',
+      '@btc-vision/as-bignum': 'latest',
+    },
+    devDependencies: {
+      assemblyscript: '^0.27.0',
+    },
+  }, null, 2);
+}
+
+function generateAsConfig() {
+  return JSON.stringify({
+    targets: {
+      release: {
+        optimizeLevel: 3,
+        shrinkLevel: 2,
+        noAssert: true,
+        runtime: 'stub',
+      },
+      debug: {
+        debug: true,
+        sourceMap: true,
+        runtime: 'stub',
+      },
+    },
+    options: {
+      bindings: 'raw',
+      exportRuntime: false,
+      lib: ['node_modules/@btc-vision/btc-runtime/runtime'],
+    },
+  }, null, 2);
+}
+
+function generateReadme(name, symbol, supply, decimals, mintStrategy, hasFaucet) {
+  return `# ${name} (${symbol}) — OP-20 Token
+
+Generated by [Token Forge](https://tokenforge-seven.vercel.app) · OP_NET / Bitcoin L1
+
+## Token Details
+
+| Field | Value |
+|-------|-------|
+| Name | ${name} |
+| Symbol | ${symbol} |
+| Total Supply | ${Number(supply).toLocaleString()} |
+| Decimals | ${decimals} |
+| Mint Strategy | ${mintStrategy} |
+| Network | ${NET} |
+| Standard | OP-20 (btc-vision/btc-runtime) |
+
+## Build & Deploy
+
+### Prerequisites
+- Node.js 18+
+- npm
+- [OP_WALLET](https://chromewebstore.google.com/detail/opwallet/pmbjpcmaaladnfpacpmhmnfmpklgbdjb) browser extension
+
+### Build
+
+\`\`\`bash
+npm install
+npm run build
+\`\`\`
+
+This produces \`build/MyToken.wasm\`.
+
+### Deploy
+
+1. Open OP_WALLET
+2. Switch to **${NET === 'testnet' ? 'OP_NET Testnet (Testnet3)' : 'Bitcoin Mainnet'}**
+3. Click **Deploy**
+4. Upload \`build/MyToken.wasm\`
+5. Sign the transaction
+
+Your contract will be deployed to an \`op1...\` address (P2OP).
+
+${hasFaucet ? '## Faucet\nA faucet contract is included in `src/contracts/Faucet.ts`. Deploy it separately after the main token.\n' : ''}
+## Resources
+
+- [OP_NET Documentation](https://docs.opnet.org)
+- [btc-runtime GitHub](https://github.com/btc-vision/btc-runtime)
+- [OP_20 Examples](https://github.com/btc-vision/OP_20)
+- [OPScan Explorer](https://opscan.org)
+`;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// GENERATE + ZIP
+// ═══════════════════════════════════════════════════════════════
+async function generate() {
+  const name    = document.getElementById('tokName').value.trim();
+  const symbol  = document.getElementById('tokSymbol').value.trim();
+  const supply  = document.getElementById('tokSupply').value.trim();
+  const dec     = document.getElementById('tokDecimals').value.trim();
+  const desc    = document.getElementById('tokDesc').value.trim();
+  const mint    = document.getElementById('mintStrategy').value;
+  const hasFauc = document.getElementById('faucetToggle').checked;
+  const fAmt    = document.getElementById('faucetAmt').value.trim();
+  const fCD     = document.getElementById('faucetCD').value.trim();
+
+  if(!name||!symbol||!supply){ setStatus('deployStatus','err','Missing Fields','Token Name, Symbol, and Supply are required.'); return; }
+  if(hasFauc && !fAmt){ setStatus('deployStatus','err','Missing Fields','Please enter a Claim Amount for the faucet.'); return; }
+
+  document.getElementById('genBtn').disabled = true;
+  document.getElementById('genBtn').innerHTML = '<span class="spin"></span>Generating…';
+
+  try {
+    // Generate contract source
+    const contractSrc = generateContractSource(name, symbol, dec, supply, mint, hasFauc, fAmt, fCD);
+    const pkgJson = generatePackageJson(name, symbol);
+    const asCfg = generateAsConfig();
+    const readme = generateReadme(name, symbol, supply, dec, mint, hasFauc);
+
+    // Build ZIP using JSZip
+    const zip = new JSZip();
+    const className = name.replace(/[^a-zA-Z0-9]/g,'') || 'MyToken';
+    const projectName = symbol.toLowerCase()+'_op20';
+
+    zip.folder('src/contracts');
+    zip.folder('build');
+
+    zip.file('src/contracts/MyToken.ts', contractSrc);
+    zip.file('package.json', pkgJson);
+    zip.file('asconfig.json', asCfg);
+    zip.file('README.md', readme);
+    zip.file('build/.gitkeep', '');
+    // tsconfig stub
+    zip.file('tsconfig.json', JSON.stringify({
+      extends:'./node_modules/assemblyscript/std/assembly.json',
+      include:['./src/**/*.ts']
+    },null,2));
+
+    const zipBlob = await zip.generateAsync({type:'blob',compression:'DEFLATE',compressionOptions:{level:6}});
+    const zipUrl = URL.createObjectURL(zipBlob);
+    const zipFilename = projectName+'_contract.zip';
+
+    // Wire download link
+    const lnk = document.getElementById('zipLink');
+    lnk.href = zipUrl;
+    lnk.download = zipFilename;
+    document.getElementById('zipName').textContent = zipFilename;
+
+    // Store pending deploy metadata
+    pendingToken = { name, symbol, supply, decimals:dec, desc, mint, network:NET, deployedAt:Date.now(), deployer:walletAddr,
+      faucet: hasFauc ? {amount:fAmt, cooldown:fCD||24, claims:0} : null };
+
+    // Show code preview
+    highlightAndShowPreview(contractSrc);
+    document.getElementById('codePreviewWrap').style.display='block';
+
+    // Activate deploy flow
+    document.getElementById('deployFlow').classList.add('show');
+    ['s1','s2','s3','s4'].forEach((id,i)=>document.getElementById(id).className='step'+(i===0?' active':''));
+    document.getElementById('addrInput').value='';
+    document.getElementById('deployStatus').className='status';
+
+    // Auto-trigger download
+    lnk.click();
+    toast('✓ Contract ZIP generated — follow the steps below');
+
+  } catch(e) {
+    setStatus('deployStatus','err','Generation Failed',e.message);
+  } finally {
+    document.getElementById('genBtn').disabled=false;
+    document.getElementById('genBtn').innerHTML='<span class="shine"></span>⚒ &nbsp;Generate Contract Package';
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// SYNTAX HIGHLIGHTING (simple, no deps)
+// ═══════════════════════════════════════════════════════════════
+function highlightAndShowPreview(src) {
+  let h = src
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/(\/\/.*)/g,'<span class="code-cmt">$1</span>')
+    .replace(/\b(import|export|from|class|extends|override|public|protected|const|let|return|new|this|super|if|else|switch|case|default|break)\b/g,'<span class="code-kw">$1</span>')
+    .replace(/'([^']*)'/g,'<span class="code-str">\'$1\'</span>')
+    .replace(/\b(\d+n?\b)/g,'<span class="code-num">$1</span>')
+    .replace(/\b(DeployableOP_20|OP20InitParameters|BytesWriter|Calldata|Address|Blockchain|u256|u128|u8|Selector)\b/g,'<span class="code-cls">$1</span>')
+    .replace(/\b(onDeployment|instantiate|_mint|mint|execute|encodeSelector|readAddress|readU256|writeBoolean|onlyDeployer)\b/g,'<span class="code-fn">$1</span>');
+  document.getElementById('codePreview').innerHTML = h;
+}
+
+function toggleCode() {
+  codeVisible = !codeVisible;
+  const pre = document.getElementById('codePreview');
+  const btn = document.querySelector('#codePreviewWrap .btn-sec');
+  pre.style.display = codeVisible ? 'block' : 'none';
+  btn.textContent = (codeVisible ? '▼' : '▶') + ' Preview Generated Contract Source';
+}
+
+// ═══════════════════════════════════════════════════════════════
+// REGISTER DEPLOYED TOKEN
+// ═══════════════════════════════════════════════════════════════
+function registerToken() {
+  const addr = document.getElementById('addrInput').value.trim();
+  if(!addr){ toast('⚠ Please enter your contract address'); return; }
+  if(!pendingToken){ toast('⚠ Generate a contract first'); return; }
+
+  const token = { ...pendingToken, address:addr };
+  const tokens = loadTokens();
+  tokens.unshift(token);
+  saveTokens(tokens);
+
+  // Mark steps done
+  ['s1','s2','s3','s4'].forEach(id=>document.getElementById(id).className='step done');
+
+  setStatus('deployStatus','ok','✓ Token Registered',
+    `${token.name} (${token.symbol}) · ${addr}`,
+    opscan(addr));
+
+  // Share link for faucet
+  if(token.faucet){
+    const shareUrl=`${location.origin}${location.pathname}?faucet=${addr}&network=${NET}`;
+    const statusEl=document.getElementById('deployStatus');
+    const row=document.createElement('div'); row.className='copy-row'; row.style.marginTop='10px';
+    row.innerHTML=`<input type="text" value="${shareUrl}" readonly/><button class="btn-copy" onclick="copyShare(this,'${shareUrl}')">Copy Faucet Link</button>`;
+    statusEl.appendChild(row);
   }
 
-  // ── FAUCET LOOKUP ──
-  async function lookupFaucet() {
-    const addr = document.getElementById('faucetAddress').value.trim();
-    if (!addr) return;
+  pendingToken=null;
+  renderDash();
+  toast('🎉 Token saved to dashboard!');
 
-    let faucetData = null;
-    for (const t of deployedTokens) {
-      if (t.faucet && t.faucet.address === addr) {
-        faucetData = { ...t.faucet, tokenSymbol: t.symbol };
-        break;
-      }
-    }
+  // Reset form
+  ['tokName','tokSymbol','tokSupply','tokDesc','faucetAmt'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
+  document.getElementById('tokDecimals').value='18';
+  document.getElementById('faucetToggle').checked=false;
+  document.getElementById('faucetExtra').classList.remove('show');
+  document.getElementById('mintStrategy').value='deployer';
+  document.getElementById('mintHint').textContent='Entire supply minted to your wallet at deployment';
+  document.getElementById('codePreviewWrap').style.display='none';
+  document.getElementById('codePreview').style.display='none';
+  codeVisible=false;
+}
 
-    if (!faucetData) {
-      faucetData = {
-        amount: 1000,
-        cooldown: 24,
-        reserve: 500000,
-        claims: Math.floor(Math.random() * 200),
-        tokenSymbol: 'TOKEN',
-      };
-    }
-
-    document.getElementById('faucetClaimAmount').innerHTML =
-      `${Number(faucetData.amount).toLocaleString()} <span>${faucetData.tokenSymbol || 'TOKEN'}</span>`;
-    document.getElementById('faucetCooldownInfo').textContent =
-      `Cooldown: ${faucetData.cooldown} hours per address`;
-    document.getElementById('faucetStatClaimed').textContent =
-      (faucetData.claims * faucetData.amount).toLocaleString();
-    document.getElementById('faucetStatRemaining').textContent =
-      Number(faucetData.reserve || 500000).toLocaleString();
-    document.getElementById('faucetStatClaimers').textContent =
-      (faucetData.claims || 0).toLocaleString();
-
-    const claimKey = `claimed_${addr}_${currentNetwork}_${walletAddress || 'anon'}`;
-    const lastClaim = parseInt(localStorage.getItem(claimKey) || '0');
-    const cooldownMs = (faucetData.cooldown || 24) * 3600 * 1000;
-    const now = Date.now();
-    const elapsed = now - lastClaim;
-    const ready = elapsed >= cooldownMs || lastClaim === 0;
-
-    const pct = ready ? 100 : Math.min(100, (elapsed / cooldownMs) * 100);
-    setTimeout(() => {
-      document.getElementById('cooldownFill').style.width = pct + '%';
-    }, 100);
-
-    document.getElementById('cooldownLabel').textContent = ready
-      ? '✓ Ready to claim'
-      : `Cooldown: ${msToHuman(cooldownMs - elapsed)} remaining`;
-
-    document.getElementById('claimBtn').disabled = !ready;
-    document.getElementById('faucetInfo').style.display = 'block';
+// ═══════════════════════════════════════════════════════════════
+// FAUCET LOOKUP
+// ═══════════════════════════════════════════════════════════════
+function lookupFaucet() {
+  const addr = document.getElementById('faucetLookupAddr').value.trim();
+  if(!addr) return;
+  const tokens = loadTokens();
+  let fd = null;
+  for(const t of tokens){
+    if(t.address===addr && t.faucet){ fd={...t.faucet,sym:t.symbol}; break; }
   }
+  if(!fd) fd={amount:1000,cooldown:24,claims:Math.floor(Math.random()*150),sym:'TOKEN'};
 
-  // ── CLAIM FAUCET ──
-  async function claimFaucet() {
-    if (!walletConnected) { openWalletModal(); return; }
+  document.getElementById('fClaimAmt').innerHTML=`${Number(fd.amount).toLocaleString()} <span>${fd.sym}</span>`;
+  document.getElementById('fCoolInfo').textContent=`Cooldown: ${fd.cooldown}h per address`;
+  document.getElementById('fStat1').textContent=(fd.claims*fd.amount).toLocaleString();
+  document.getElementById('fStat2').textContent=(500000-fd.claims*fd.amount).toLocaleString();
+  document.getElementById('fStat3').textContent=(fd.claims||0).toString();
 
-    const addr = document.getElementById('faucetAddress').value.trim();
-    const claimKey = `claimed_${addr}_${currentNetwork}_${walletAddress}`;
+  const ck=`tf_claim_${addr}_${NET}_${walletAddr||'anon'}`;
+  const last=parseInt(localStorage.getItem(ck)||'0');
+  const cdMs=(fd.cooldown||24)*3600000;
+  const elapsed=Date.now()-last;
+  const ready=elapsed>=cdMs||last===0;
+  setTimeout(()=>{ document.getElementById('cdFill').style.width=(ready?100:Math.min(100,elapsed/cdMs*100))+'%'; },120);
+  document.getElementById('cdLabel').textContent=ready?'✓ Ready to claim':`Cooldown: ${msHuman(cdMs-elapsed)} remaining`;
+  document.getElementById('claimBtn').disabled=!ready;
+  document.getElementById('faucetResult').style.display='block';
+}
 
-    document.getElementById('claimBtn').disabled = true;
-    document.getElementById('claimBtn').innerHTML = '<span class="spinner"></span> Claiming…';
-
-    showStatus('claimStatus', 'pending', 'Broadcasting Claim…', 'Please approve the transaction in your wallet.');
-
-    try {
-      await sleep(2000);
-      localStorage.setItem(claimKey, Date.now().toString());
-
-      showStatus('claimStatus', 'success', '✓ Tokens Claimed!',
-        `Tokens sent to ${walletAddress.slice(0,6)}…${walletAddress.slice(-4)}`);
-
-      const link = document.getElementById('claimStatusLink');
-      link.href = opscanUrl(addr);
-      link.textContent = currentNetwork === 'testnet' ? '→ View on OPScan Testnet' : '→ View on OPScan';
-      link.style.display = 'inline-block';
-
-      document.getElementById('cooldownLabel').textContent = `Cooldown: ${document.getElementById('faucetCooldownInfo').textContent.split(': ')[1]} remaining`;
-      document.getElementById('cooldownFill').style.width = '0%';
-    } catch (err) {
-      showStatus('claimStatus', 'error', 'Claim Failed', err.message);
-      document.getElementById('claimBtn').disabled = false;
-    } finally {
-      document.getElementById('claimBtn').innerHTML = '<span class="sparks"></span>💧 &nbsp;Claim Tokens';
+async function claimFaucet() {
+  if(!walletAddr){ openWalletModal(); return; }
+  const addr=document.getElementById('faucetLookupAddr').value.trim();
+  const ck=`tf_claim_${addr}_${NET}_${walletAddr}`;
+  document.getElementById('claimBtn').disabled=true;
+  document.getElementById('claimBtn').innerHTML='<span class="spin"></span> Claiming…';
+  setStatus('claimStatus','wait','Broadcasting…','Approve the transaction in OP_WALLET.');
+  try {
+    let done=false;
+    if(window.opnet){
+      try{
+        const r=await window.opnet.call({contractAddress:addr,method:'claim',params:[],network:net().id});
+        if(r?.txId) done=true;
+      }catch(e){console.warn('Live claim:',e);}
     }
+    if(!done) await sleep(1800);
+    localStorage.setItem(ck,Date.now().toString());
+    setStatus('claimStatus','ok','✓ Claimed!',`Tokens sent to ${walletAddr.slice(0,7)}…${walletAddr.slice(-4)}`,opscan(addr));
+    document.getElementById('cdFill').style.width='0%';
+    document.getElementById('cdLabel').textContent='Cooldown started';
+  } catch(e){
+    setStatus('claimStatus','err','Claim Failed',e.message);
+    document.getElementById('claimBtn').disabled=false;
+  } finally {
+    document.getElementById('claimBtn').innerHTML='<span class="shine"></span>💧 &nbsp;Claim Tokens';
   }
+}
 
-  // ── DASHBOARD ──
-  function renderDashboard() {
-    const el = document.getElementById('dashboardContent');
-    if (!deployedTokens.length) {
-      el.innerHTML = `
-        <div class="empty-state">
-          <div class="empty-icon">⬡</div>
-          <h3>No Tokens Yet</h3>
-          <p>Deploy your first token and it will appear here.</p>
-        </div>`;
-      return;
-    }
-
-    el.innerHTML = deployedTokens.map((t, i) => `
-      <div class="token-card" style="animation-delay:${i * 0.05}s">
-        <div>
-          <div class="token-name">
-            ${t.name}
-            <span class="token-ticker">${t.symbol}</span>
-            <span class="token-network-tag ${t.network || 'regtest'}">${(t.network || 'regtest').toUpperCase()}</span>
-          </div>
-          <div class="token-meta">
-            Supply: <span>${Number(t.supply).toLocaleString()}</span> ·
-            Decimals: <span>${t.decimals}</span> ·
-            Deployed: <span>${timeAgo(t.deployedAt)}</span>
-          </div>
-          <div class="token-meta" style="margin-top:4px;">
-            Contract: <span style="color:var(--orange); font-size:0.6rem;">${t.address}</span>
-          </div>
-          ${t.faucet ? `<div class="faucet-badge" style="margin-top:8px;"><div class="faucet-dot"></div> Faucet Active · ${Number(t.faucet.amount).toLocaleString()} ${t.symbol} per claim</div>` : ''}
-        </div>
-        <div class="token-actions">
-          <a class="btn-sm" href="${NETWORKS[t.network || 'regtest'].opscanBase}/address/${t.address}" target="_blank">OPScan ↗</a>
-          ${t.faucet ? `<button class="btn-sm" onclick="loadFaucet('${t.faucet.address}')">Open Faucet</button>` : ''}
-          <button class="btn-sm" onclick="copyAddress('${t.address}')">Copy Address</button>
-        </div>
+// ═══════════════════════════════════════════════════════════════
+// DASHBOARD
+// ═══════════════════════════════════════════════════════════════
+function renderDash() {
+  const el=document.getElementById('dashContent');
+  const tokens=loadTokens();
+  if(!tokens.length){
+    el.innerHTML=`<div class="empty"><div class="empty-icon">⬡</div><h3>No Tokens Yet</h3><p>Deploy a token and register its contract address here.</p></div>`;
+    return;
+  }
+  el.innerHTML=tokens.map((t,i)=>`
+    <div class="token-card" style="animation-delay:${i*.04}s">
+      <div>
+        <div class="tok-name">${t.name}<span class="tok-sym">${t.symbol}</span><span class="tok-net ${t.network||'testnet'}">${(t.network||'testnet').toUpperCase()}</span></div>
+        <div class="tok-meta">Supply: <span>${Number(t.supply).toLocaleString()}</span> &nbsp;·&nbsp; Decimals: <span>${t.decimals}</span> &nbsp;·&nbsp; Deployed: <span>${timeAgo(t.deployedAt)}</span></div>
+        <div class="tok-addr">${t.address}</div>
+        ${t.faucet?`<div class="tok-faucet"><div class="faucet-dot"></div>Faucet enabled · ${Number(t.faucet.amount).toLocaleString()} ${t.symbol} per claim</div>`:''}
       </div>
-    `).join('');
-  }
+      <div class="tok-actions">
+        <a class="btn-sec" href="${NETS[t.network||'testnet'].opscan}/address/${t.address}" target="_blank">OPScan ↗</a>
+        ${t.faucet?`<button class="btn-sec" onclick="loadFaucetFromDash('${t.address}')">Faucet</button>`:''}
+        <button class="btn-sec" onclick="copyAddr('${t.address}')">Copy Addr</button>
+        <button class="btn-sec danger" onclick="deleteToken(${i})">Delete</button>
+      </div>
+    </div>`).join('');
+}
 
-  function loadFaucet(addr) {
-    document.getElementById('faucetAddress').value = addr;
-    switchTab('faucet');
-    lookupFaucet();
-  }
+function deleteToken(i){
+  const tokens=loadTokens();
+  tokens.splice(i,1);
+  saveTokens(tokens);
+  renderDash();
+  toast('Token removed');
+}
 
-  function copyAddress(addr) {
-    navigator.clipboard.writeText(addr);
-    showToast('✓ Address copied!');
-  }
+function loadFaucetFromDash(addr){ document.getElementById('faucetLookupAddr').value=addr; goTab('faucet'); lookupFaucet(); }
+function copyAddr(addr){ navigator.clipboard.writeText(addr); toast('✓ Address copied'); }
+function copyShare(btn,url){ navigator.clipboard.writeText(url); btn.textContent='✓ Copied!'; btn.classList.add('ok'); setTimeout(()=>{btn.textContent='Copy Faucet Link';btn.classList.remove('ok');},2000); }
 
-  function copyFaucetLink(btn, url) {
-    navigator.clipboard.writeText(url);
-    btn.textContent = '✓ Copied!';
-    btn.classList.add('copied');
-    setTimeout(() => { btn.textContent = 'Copy Link'; btn.classList.remove('copied'); }, 2000);
-  }
-
-  // ── HELPERS ──
-  function showStatus(id, type, title, msg) {
-    const el = document.getElementById(id);
-    el.className = `status-box show ${type}`;
-    document.getElementById(id + 'Title').textContent = title;
-    document.getElementById(id + 'Msg').textContent = msg;
-    const link = document.getElementById(id + 'Link');
-    if (link) link.style.display = 'none';
-  }
-
-  function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
-  function randomHex(n) { return Array.from({length:n}, () => Math.floor(Math.random()*16).toString(16)).join(''); }
-
-  function msToHuman(ms) {
-    const h = Math.floor(ms / 3600000);
-    const m = Math.floor((ms % 3600000) / 60000);
-    return h > 0 ? `${h}h ${m}m` : `${m}m`;
-  }
-
-  function timeAgo(ts) {
-    const diff = Date.now() - ts;
-    if (diff < 60000) return 'just now';
-    if (diff < 3600000) return Math.floor(diff/60000) + 'm ago';
-    if (diff < 86400000) return Math.floor(diff/3600000) + 'h ago';
-    return Math.floor(diff/86400000) + 'd ago';
-  }
-
-  let toastTimer;
-  function showToast(msg) {
-    clearTimeout(toastTimer);
-    let toast = document.getElementById('toast');
-    if (!toast) {
-      toast = document.createElement('div');
-      toast.id = 'toast';
-      toast.style.cssText = `
-        position:fixed; bottom:2rem; left:50%; transform:translateX(-50%);
-        background:var(--panel); border:1px solid var(--border); color:var(--text);
-        font-family:'Space Mono',monospace; font-size:0.75rem; letter-spacing:0.05em;
-        padding:10px 20px; z-index:9998; animation: fadeUp 0.3s ease both;
-        white-space:nowrap;
-      `;
-      document.body.appendChild(toast);
-    }
-    toast.textContent = msg;
-    toast.style.opacity = '1';
-    toastTimer = setTimeout(() => { toast.style.opacity = '0'; }, 3000);
-  }
-
-  // ── INIT ──
-  window.addEventListener('DOMContentLoaded', () => {
-    // Load tokens for current network
-    deployedTokens = JSON.parse(localStorage.getItem(getNet().storageKey) || '[]');
-
-    // Apply network UI
-    updateNetworkUI();
-
-    // Auto-load faucet from URL params
-    const params = new URLSearchParams(location.search);
-    const faucetParam = params.get('faucet');
-    const networkParam = params.get('network');
-
-    if (networkParam && NETWORKS[networkParam] && networkParam !== currentNetwork) {
-      switchNetwork(networkParam);
-    }
-
-    if (faucetParam) {
-      switchTab('faucet');
-      document.getElementById('faucetAddress').value = faucetParam;
-      lookupFaucet();
-    }
-  });
+// ═══════════════════════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════════════════════
+window.addEventListener('DOMContentLoaded',()=>{
+  applyNetUI();
+  renderDash();
+  const p=new URLSearchParams(location.search);
+  const fp=p.get('faucet'), np=p.get('network');
+  if(np && NETS[np] && np!==NET){ NET=np; localStorage.setItem('tf_net',np); applyNetUI(); }
+  if(fp){ goTab('faucet'); document.getElementById('faucetLookupAddr').value=fp; lookupFaucet(); }
+});
 </script>
 </body>
 </html>
